@@ -1976,7 +1976,12 @@ function showApp(){
     if(kTot)kTot.textContent='…';if(kOk)kOk.textContent='…';if(kOff)kOff.textContent='…';
     renderAll(); // render với localStorage trước
     // Async: kéo toàn bộ từ Sheet rồi render lại
-    pullAll().then(()=>{renderAll();}).catch(e=>console.warn('[pullAll]',e));
+    pullAll().then(()=>{
+      renderAll();
+      // Sau khi Sheet 4 load xong, PARTS_LOAI_MAP đã có dữ liệu → refresh dropdown loại
+      if(typeof pvBDSCRenderSelected==='function') pvBDSCRenderSelected();
+      if(typeof pvBDSCRenderVatTuSearch==='function') pvBDSCRenderVatTuSearch();
+    }).catch(e=>console.warn('[pullAll]',e));
   } else {
     // Offline: render thẳng với data tĩnh
     renderAll();
@@ -5255,6 +5260,9 @@ async function syncSheet(num){
       renderPhenDb();
       const nLoai=Object.keys(window.PARTS_LOAI_MAP).filter(k=>window.PARTS_LOAI_MAP[k].length).length;
       toast(`✅ Sheet 4: ${Object.keys(PARTS_MAP).length} cụm · ${nLoai} vật tư có loại`,'ok');
+      // Refresh danh sách vật tư đã chọn để hiện dropdown loại
+      if(typeof pvBDSCRenderSelected==='function') pvBDSCRenderSelected();
+      if(typeof pvBDSCRenderVatTuSearch==='function') pvBDSCRenderVatTuSearch();
     }
   }
 
