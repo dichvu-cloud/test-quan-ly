@@ -6729,8 +6729,11 @@ function pvBDSCSelectable() {
 function pvBDSCAddFixed() {
   (PV.data.vatTuCoDinh||[]).filter(pvTenVatTu).forEach(x => {
     const id = pvMatId(x);
-    if (!PV.data.selected.find(i=>i.id===id))
-      PV.data.selected.push({id, tenVatTu:pvTenVatTu(x), cumLinhKien:pvCum(x), maVatTu:pvGetObj(x,['Mã vật tư','Ma vat tu'])||'', donViTinh:pvGetObj(x,['ĐVT','Đơn vị tính','DVT'])||'', soLuongCan:1, tinhTrangXuatKho:'Mới', nguonVatTu:'Cố định', fixed:true});
+    if (!PV.data.selected.find(i=>i.id===id)) {
+      const lk = pvTenVatTu(x);
+      const cum = pvCum(x) || pvFindCumForLK(lk);
+      PV.data.selected.push({id, tenVatTu:lk, cumLinhKien:cum, maVatTu:pvGetObj(x,['Mã vật tư','Ma vat tu'])||'', donViTinh:pvGetObj(x,['ĐVT','Đơn vị tính','DVT'])||'', soLuongCan:1, tinhTrangXuatKho:'Mới', nguonVatTu:'Cố định', fixed:true});
+    }
   });
 }
 
@@ -6750,8 +6753,8 @@ function pvBDSCRenderVatTuSearch() {
         const id=pvMatId(x);
         const cum=pvCum(x);
         const lk=pvTenVatTu(x);
-        // Lấy danh sách mã loại từ PARTS_LOAI_MAP (đã sync từ cột G Sheet 4)
-        const cacLoai=(window.PARTS_LOAI_MAP&&window.PARTS_LOAI_MAP[cum+'__'+lk])||[];
+        // Lấy danh sách mã loại từ PARTS_LOAI_MAP (có fallback tìm cum)
+        const cacLoai = pvGetCacLoai(cum, lk);
         const loaiCtl = cacLoai.length>0
           ? `<select id="v25_loai_${pvCss(id)}" title="Chọn mã/loại (Sheet 4 cột G)" style="border:1.5px solid #a7f3d0;border-radius:6px;padding:3px 6px;font-size:11px;background:#f0fdf4;color:#065f46;font-weight:600;flex-shrink:0;max-width:160px">${cacLoai.map(l=>`<option value="${pvEsc(l)}">${pvEsc(l)}</option>`).join('')}</select>`
           : '';
@@ -6784,44 +6787,33 @@ function pvBDSCSelectMaterial(id, checked) {
   pvBDSCRenderVatTuSearch(); pvBDSCRenderSelected();
 }
 
-// ── pvBDSCRenderSelected — hàm duy nhất, có dropdown chọn loại từ PARTS_LOAI_MAP ──
-function _pvBDSCRenderSelectedImpl() {
-  const box = document.getElementById('pvb_selectedItems');
-  if (!box) return;
-  if (!PV.data.selected.length) {
-    box.innerHTML = '<i style="font-size:12px;color:var(--mu)">Chưa chọn vật tư.</i>';
-    return;
-  }
-  box.innerHTML = PV.data.selected.map(x => {
-    const cum = x.cumLinhKien || '';
-    const lk  = x.tenVatTu || '';
-    // Tra PARTS_LOAI_MAP để lấy danh sách mã loại cho vật tư này
-    const loaiArr = (window.PARTS_LOAI_MAP && window.PARTS_LOAI_MAP[cum + '__' + lk]) || [];
-    const curLoai = x.maLoai || '';
-    let loaiCtl = '';
-    if (loaiArr.length > 0) {
-      // Có nhiều loại → dropdown để chọn
-      loaiCtl = `<select title="Chọn mã/loại (Sheet 4 cột G)"
-        style="border:1.5px solid #a7f3d0;border-radius:6px;padding:3px 7px;font-size:11px;background:#f0fdf4;color:#065f46;font-weight:700;flex-shrink:0;max-width:170px;font-family:monospace;cursor:pointer"
-        onchange="pvBDSCUpdLoai('${pvJs(x.id)}',this.value)">
-        <option value="">-- Chọn loại --</option>
-        ${loaiArr.map(l => `<option value="${pvEsc(l)}" ${l === curLoai ? 'selected' : ''}>${pvEsc(l)}</option>`).join('')}
-      </select>`;
-    } else if (curLoai) {
-      // Đã có loại nhưng không có danh sách → hiện badge
-      loaiCtl = `<span style="font-size:10px;padding:2px 7px;border-radius:99px;background:#eff6ff;color:#1e40af;font-weight:700;border:1px solid #bfdbfe;white-space:nowrap;font-family:monospace">${pvEsc(curLoai)}</span>`;
+// ── Hàm tìm cụm linh kiện từ tên vật tư (fallback khi cumLinhKien rỗng) ──
+function pvFindCumForLK(lkName) {
+  if (!lkName) return '';
+  const norm = pvNorm(lkName);
+  // Tìm trong PARTS_MAP local trước
+  if (typeof PARTS_MAP !== 'undefined') {
+    for (const [cum, parts] of Object.entries(PARTS_MAP)) {
+      if (parts.some(p => pvNorm(p) === norm)) return cum;
     }
-    const checked = x.included !== false;
-    return `<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--bd);border-radius:8px;margin-bottom:5px;background:${checked?'#fff':'#f8fafc'};flex-wrap:wrap;opacity:${checked?1:.55}">
-      <input type="checkbox" ${checked?'checked':''} onchange="pv16ToggleInclude('${pvJs(x.id)}',this.checked)" style="width:16px;height:16px;accent-color:var(--g);flex-shrink:0">
-      <div style="flex:1;min-width:120px;font-size:12px"><b>${pvEsc(lk)}</b><br><span style="color:var(--mu);font-size:10px">${pvEsc(cum)} · ${pvEsc(x.nguonVatTu||'')}${x.fixed?' · Cố định':''}</span></div>
-      ${loaiCtl}
-      <input type="number" min="0" value="${pvEsc(String(x.soLuongCan||''))}" style="width:60px;border:1.5px solid var(--bd);border-radius:6px;padding:3px 6px;font-size:11px;text-align:center;flex-shrink:0" onchange="pvBDSCUpdQty('${pvJs(x.id)}',this.value)">
-      <select style="border:1.5px solid var(--bd);border-radius:6px;padding:3px 5px;font-size:11px;flex-shrink:0" onchange="pvBDSCUpdSt('${pvJs(x.id)}',this.value)">${['Mới','Cũ','Tốt','K.xđ'].map(s=>`<option ${s===x.tinhTrangXuatKho?'selected':''}>${s}</option>`).join('')}</select>
-      ${!x.fixed ? `<button class="btn bg-r sm" onclick="pvBDSCRemoveMat('${pvJs(x.id)}')">Bỏ</button>` : ''}
-    </div>`;
-  }).join('');
+  }
+  // Tìm trong PV.data.vatTu
+  const found = (PV.data && PV.data.vatTu || []).find(x => pvNorm(pvTenVatTu(x)) === norm);
+  return found ? pvCum(found) : '';
 }
+
+// ── Hàm lấy cacLoai từ PARTS_LOAI_MAP với fallback tìm cum ──
+function pvGetCacLoai(cumLinhKien, tenVatTu) {
+  const lk = String(tenVatTu || '').trim();
+  if (!lk) return [];
+  let cum = String(cumLinhKien || '').trim();
+  // Nếu cumLinhKien rỗng, thử tìm từ PARTS_MAP/vatTu
+  if (!cum) cum = pvFindCumForLK(lk);
+  if (!cum) return [];
+  const key = cum + '__' + lk;
+  return (window.PARTS_LOAI_MAP && window.PARTS_LOAI_MAP[key]) || [];
+}
+
 // ── pvBDSCRenderSelected — dropdown chọn loại từ PARTS_LOAI_MAP (cột G Sheet 4) ──
 function _pvBDSCRenderSelectedImpl() {
   const box = document.getElementById('pvb_selectedItems');
@@ -6831,14 +6823,14 @@ function _pvBDSCRenderSelectedImpl() {
     return;
   }
   box.innerHTML = PV.data.selected.map(x => {
-    const cum = x.cumLinhKien || '';
     const lk  = x.tenVatTu || '';
-    // Tra PARTS_LOAI_MAP để lấy danh sách mã loại
-    const loaiArr = (window.PARTS_LOAI_MAP && window.PARTS_LOAI_MAP[cum + '__' + lk]) || [];
+    const cum = x.cumLinhKien || pvFindCumForLK(lk);
+    // Tra PARTS_LOAI_MAP (có fallback tìm cum)
+    const loaiArr = pvGetCacLoai(cum, lk);
     const curLoai = x.maLoai || '';
     let loaiCtl = '';
     if (loaiArr.length > 0) {
-      loaiCtl = '<select title="Chọn mã/loại (Sheet 4 cột G)" style="border:1.5px solid #a7f3d0;border-radius:6px;padding:3px 7px;font-size:11px;background:#f0fdf4;color:#065f46;font-weight:700;flex-shrink:0;max-width:170px;font-family:monospace;cursor:pointer" onchange="pvBDSCUpdLoai(\'' + pvJs(x.id) + '\',this.value)"><option value="">-- Chọn loại --</option>' + loaiArr.map(l => '<option value="' + pvEsc(l) + '"' + (l === curLoai ? ' selected' : '') + '>' + pvEsc(l) + '</option>').join('') + '</select>';
+      loaiCtl = '<select title="Chọn mã/loại" style="border:1.5px solid #a7f3d0;border-radius:6px;padding:3px 7px;font-size:11px;background:#f0fdf4;color:#065f46;font-weight:700;flex-shrink:0;max-width:170px;font-family:monospace;cursor:pointer" onchange="pvBDSCUpdLoai(\'' + pvJs(x.id) + '\',this.value)"><option value="">-- Chọn loại --</option>' + loaiArr.map(l => '<option value="' + pvEsc(l) + '"' + (l === curLoai ? ' selected' : '') + '>' + pvEsc(l) + '</option>').join('') + '</select>';
     } else if (curLoai) {
       loaiCtl = '<span style="font-size:10px;padding:2px 7px;border-radius:99px;background:#eff6ff;color:#1e40af;font-weight:700;border:1px solid #bfdbfe;font-family:monospace">' + pvEsc(curLoai) + '</span>';
     }
@@ -6856,6 +6848,12 @@ function _pvBDSCRenderSelectedImpl() {
 }
 
 function pvBDSCRenderSelected() { _pvBDSCRenderSelectedImpl(); }
+
+// Hàm lưu maLoai vào selected item và re-render
+function pvBDSCUpdLoai(id, val) {
+  const it = PV.data.selected.find(x => x.id === id);
+  if (it) it.maLoai = val;
+}
 
 function pvBDSCRemoveMat(id) {
   const it = PV.data.selected.find(x=>x.id===id);
@@ -7773,9 +7771,10 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape')['ov-part','ov-view'
     // Mã loại cụ thể từ cột G Sheet 4 (VD: BKR6E, RECMF-8560, A-7473...)
     // Lấy từ PARTS_LOAI_MAP nếu có, nếu không thì text input
     const curMaLoai = String(x.maLoai||x.loaiVatTu||'');
-    const cumKey = String(x.cumLinhKien||'');
-    const lkKey  = String(x.tenVatTu||'');
-    const cacLoaiAvail = (window.PARTS_LOAI_MAP && window.PARTS_LOAI_MAP[cumKey+'__'+lkKey]) || [];
+    const cumKey = String(x.cumLinhKien||'') || (typeof pvFindCumForLK==='function' ? pvFindCumForLK(lkKey) : '');
+    const cacLoaiAvail = (typeof pvGetCacLoai==='function')
+      ? pvGetCacLoai(cumKey, lkKey)
+      : ((window.PARTS_LOAI_MAP && window.PARTS_LOAI_MAP[cumKey+'__'+lkKey]) || []);
     const loaiCtl = cacLoaiAvail.length > 0
       ? `<select data-k="maLoai" title="Mã loại từ Sheet 4 cột G"
             style="font-size:11px;width:100%;border:1.5px solid #a7f3d0;border-radius:5px;padding:3px 5px;background:#f0fdf4;color:#065f46;font-weight:600;font-family:monospace">
