@@ -6867,7 +6867,10 @@ function _pvBDSCRenderSelectedImpl() {
   }).join('');
 }
 
-// pvBDSCRenderSelected đã được gán ở block V16 (dùng lazy wrapper → _pvBDSCRenderSelectedImpl)
+// pvBDSCRenderSelected — khai báo chính thức để đảm bảo luôn tồn tại trong mọi script scope
+function pvBDSCRenderSelected() {
+  if (typeof _pvBDSCRenderSelectedImpl === 'function') _pvBDSCRenderSelectedImpl();
+}
 
 // Hàm lưu maLoai vào selected item và re-render
 function pvBDSCUpdLoai(id, val) {
@@ -7794,6 +7797,7 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape')['ov-part','ov-view'
     // Mã loại cụ thể từ cột G Sheet 4 (VD: BKR6E, RECMF-8560, A-7473...)
     // Lấy từ PARTS_LOAI_MAP nếu có, nếu không thì text input
     const curMaLoai = String(x.maLoai||x.loaiVatTu||'');
+    const lkKey  = String(x.tenVatTu||'');
     const cumKey = String(x.cumLinhKien||'') || (typeof pvFindCumForLK==='function' ? pvFindCumForLK(lkKey) : '');
     const cacLoaiAvail = (typeof pvGetCacLoai==='function')
       ? pvGetCacLoai(cumKey, lkKey)
