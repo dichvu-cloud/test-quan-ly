@@ -9464,3 +9464,277 @@ nav=function(p){
 })();
 </script>
 
+<!-- V30 hotfix: them vat tu phat sinh bang dropdown tu danh sach vat tu -->
+<style id="pv30-complete-material-dropdown-style">
+  #pv18_complete_table .pv30-material-select,
+  #pv17_complete_table .pv30-material-select,
+  #pv16_complete_table .pv30-material-select{
+    width:100%;min-width:230px;border:1.5px solid var(--bd);border-radius:7px;padding:5px 8px;font-size:11px;background:#fff;color:var(--s);
+  }
+  #pv18_complete_table .pv30-material-select:focus,
+  #pv17_complete_table .pv30-material-select:focus,
+  #pv16_complete_table .pv30-material-select:focus,
+  #pv18_complete_table .pv30-code-select:focus,
+  #pv17_complete_table .pv30-code-select:focus,
+  #pv16_complete_table .pv30-code-select:focus{
+    border-color:var(--g);box-shadow:0 0 0 2px rgba(13,110,63,.10);outline:none;
+  }
+  #pv18_complete_table .pv30-material-cell,
+  #pv17_complete_table .pv30-material-cell,
+  #pv16_complete_table .pv30-material-cell{
+    display:flex;align-items:center;gap:6px;min-width:320px;
+  }
+  #pv18_complete_table .pv30-material-cell .pv30-main,
+  #pv17_complete_table .pv30-material-cell .pv30-main,
+  #pv16_complete_table .pv30-material-cell .pv30-main{
+    flex:1;min-width:210px;
+  }
+  #pv18_complete_table .pv30-code-select,
+  #pv17_complete_table .pv30-code-select,
+  #pv16_complete_table .pv30-code-select{
+    width:155px;max-width:155px;border:1.5px solid var(--bd);border-radius:7px;padding:5px 7px;font-size:11px;background:#fff;color:var(--s);flex-shrink:0;
+  }
+  #pv18_complete_table .pv30-code-pill,
+  #pv17_complete_table .pv30-code-pill,
+  #pv16_complete_table .pv30-code-pill{
+    display:inline-flex;align-items:center;max-width:155px;border:1px solid #cbd5e1;border-radius:999px;padding:3px 8px;font-size:10px;color:var(--mu);background:#f8fafc;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0;
+  }
+  @media(max-width:900px){
+    #pv18_complete_table .pv30-material-cell,
+    #pv17_complete_table .pv30-material-cell,
+    #pv16_complete_table .pv30-material-cell{min-width:240px;flex-wrap:wrap;}
+    #pv18_complete_table .pv30-code-select,
+    #pv17_complete_table .pv30-code-select,
+    #pv16_complete_table .pv30-code-select{width:100%;max-width:100%;}
+  }
+</style>
+<script id="pv30-complete-material-dropdown-js">
+(function(){
+  if(window.__pv30CompleteMaterialDropdown)return;
+  window.__pv30CompleteMaterialDropdown=true;
+
+  function pvRef(){try{return window.PV||PV;}catch(e){return window.PV||null;}}
+  function esc(s){if(typeof window.pvEsc==='function')return window.pvEsc(s);return String(s||'').replace(/[&<>"']/g,function(m){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m];});}
+  function js(s){if(typeof window.pvJs==='function')return window.pvJs(s);return String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\r/g,'').replace(/\n/g,'\\n');}
+  function norm(s){if(typeof window.pvNorm==='function')return window.pvNorm(s);return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/đ/g,'d').replace(/\s+/g,' ').trim();}
+  function getObj(o,keys){
+    if(!o)return '';
+    if(typeof window.pvGetObj==='function')return window.pvGetObj(o,keys)||'';
+    var want=(keys||[]).map(norm);
+    for(var k in o){if(want.indexOf(norm(k))>=0 && o[k]!=null && o[k]!=='')return o[k];}
+    return '';
+  }
+  function tenVT(o){return typeof window.pvTenVatTu==='function'?window.pvTenVatTu(o):String(getObj(o,['Tên Chi Tiết / Linh Kiện Thay Thế','Tên chi tiết / linh kiện thay thế','Hạng mục vật tư','Tên vật tư','Ten vat tu','lk','tenVatTu'])||'').trim();}
+  function cumVT(o){return typeof window.pvCum==='function'?window.pvCum(o):String(getObj(o,['Cụm Linh Kiện','Cụm linh kiện','Cum Linh Kien','cum','cumLinhKien'])||'').trim();}
+  function maVT(o){return String(getObj(o,['Mã vật tư','Ma vat tu','Mã VT','Ma VT','Mã','maVatTu','code'])||'').trim();}
+  function dvtVT(o){return String(getObj(o,['ĐVT','Đơn vị tính','DVT','donViTinh'])||'').trim();}
+  function rawTypes(o){return getObj(o,['Các loại','Cac loai','các loại','cac loai','Loại vật tư','Loai vat tu','loaiVatTu','loai_vat_tu','vatTuLoai','type','types']);}
+  function uniq(arr,by){var out=[],seen={};(arr||[]).forEach(function(x){var k=by?by(x):norm(x);if(!k||seen[k])return;seen[k]=1;out.push(x);});return out;}
+  function splitValues(raw){
+    raw=String(raw||'').replace(/\r/g,'\n').trim();
+    if(!raw)return [];
+    return uniq(raw.split(/\n|;|\|/g).map(function(v){return String(v||'').replace(/^[-•]+\s*/,'').replace(/^"|"$/g,'').trim();}));
+  }
+
+  var FALLBACK_TYPES={
+    'bugi':['BKR6E','DCPR8E','Mar10A-J 4706','BP6ES'],
+    'o bi truc danh lua':['Vòng bi SKF 6007 - 2Z'],
+    'o bi cu phat':['Vòng bi E 30206J','Vòng bi 6312C3','Vòng bi 6317','Vòng bi 6215ZZCM','Vòng bi 6310-2Z'],
+    'day curoa':['RECMF - 8560','A-7473','A-5639','12PK1625','A64','8610','C60 - RECMF 9600','A54','5PK1110','5PK1050'],
+    'bau loc gio / cum loc gio':['LỌC GIÓ 6D105(AS1024)','A-6465A (Nitco)/ A-6117-S','Lọc gió A6117S','Lọc gió Donaldson P532473','P831197'],
+    'bau loc gio':['LỌC GIÓ 6D105(AS1024)','A-6465A (Nitco)/ A-6117-S','Lọc gió A6117S','Lọc gió Donaldson P532473','P831197'],
+    'loc gio':['LỌC GIÓ 6D105(AS1024)','A-6465A (Nitco)/ A-6117-S','Lọc gió A6117S','Lọc gió Donaldson P532473','P831197'],
+    'loc nhot 1':['C-5602','T-5121','LF9009','Lọc nhớt Sakura O-18051','WF2072','Lọc nhớt Sakura O-1808','Lọc nhớt Sakura O-1809','Lọc nhớt Sakura O-1804','Lọc nhớt Sakura O-1806'],
+    'loc nhot 2':['C-5602','T-5121','LF9009','Lọc nhớt Sakura O-18051','WF2072','Lọc nhớt Sakura O-1808','Lọc nhớt Sakura O-1809','Lọc nhớt Sakura O-1804','Lọc nhớt Sakura O-1806'],
+    'bo loc nhot dong toan phan':['C-5602','T-5121','LF9009','Lọc nhớt Sakura O-18051','WF2072','Lọc nhớt Sakura O-1808','Lọc nhớt Sakura O-1809','Lọc nhớt Sakura O-1804','Lọc nhớt Sakura O-1806'],
+    'bo loc nhot tinh dong re nhanh':['C-5602','T-5121','LF9009','Lọc nhớt Sakura O-18051','WF2072','Lọc nhớt Sakura O-1808','Lọc nhớt Sakura O-1809','Lọc nhớt Sakura O-1804','Lọc nhớt Sakura O-1806']
+  };
+  function fallbackTypesForName(name){
+    var n=norm(name), out=[];
+    Object.keys(FALLBACK_TYPES).forEach(function(k){if(n===k || n.indexOf(k)>=0 || k.indexOf(n)>=0)out=out.concat(FALLBACK_TYPES[k]);});
+    return uniq(out);
+  }
+
+  function allRows(){
+    var p=pvRef(), d=p&&p.data?p.data:{};
+    var rows=[];
+    if(Array.isArray(d.vatTu))rows=rows.concat(d.vatTu);
+    if(Array.isArray(d.vatTuCoDinh))rows=rows.concat(d.vatTuCoDinh);
+    return rows.filter(tenVT);
+  }
+  function materialKey(cum,name){return norm(String(cum||'')+'|'+String(name||''));}
+  function materialCatalog(){
+    var map={};
+    allRows().forEach(function(r){
+      var name=tenVT(r), cum=cumVT(r), key=materialKey(cum,name);
+      if(!map[key])map[key]={key:key,name:name,cum:cum,rows:[]};
+      map[key].rows.push(r);
+    });
+    return Object.keys(map).map(function(k){return map[k];}).sort(function(a,b){
+      return (a.cum+' '+a.name).localeCompare(b.cum+' '+b.name,'vi');
+    });
+  }
+  function findCatalogByKey(key){return materialCatalog().find(function(x){return x.key===key;})||null;}
+  function findCatalogForItem(x){
+    x=x||{};
+    var cum=String(x.cumLinhKien||x.cum||'').trim();
+    var raw=String(x.tenVatTuGoc||x.tenVatTu||'').trim();
+    var list=materialCatalog();
+    var exact=list.find(function(c){return materialKey(cum,raw)===c.key;});
+    if(exact)return exact;
+    var nr=norm(raw), nc=norm(cum), best=null;
+    list.forEach(function(c){
+      if(nc && norm(c.cum)!==nc)return;
+      var nn=norm(c.name);
+      if(nr===nn || nr.indexOf(nn+' - ')===0 || nr.indexOf(nn+' – ')===0 || nr.indexOf(nn+' — ')===0){
+        if(!best || c.name.length>best.name.length)best=c;
+      }
+    });
+    return best;
+  }
+  function variantsFor(cum,name){
+    var nc=norm(cum), nn=norm(name), out=[];
+    allRows().forEach(function(r){
+      if(norm(tenVT(r))!==nn)return;
+      if(nc && cumVT(r) && norm(cumVT(r))!==nc)return;
+      var ma=maVT(r), dvt=dvtVT(r), types=splitValues(rawTypes(r));
+      if(types.length){
+        types.forEach(function(t){out.push({label:t+(ma&&norm(ma)!==norm(t)?' - '+ma:''),loaiVatTu:t,maVatTu:ma,donViTinh:dvt});});
+      }else if(ma){
+        out.push({label:ma,loaiVatTu:ma,maVatTu:ma,donViTinh:dvt});
+      }else{
+        out.push({label:'',loaiVatTu:'',maVatTu:'',donViTinh:dvt});
+      }
+    });
+    fallbackTypesForName(name).forEach(function(t){out.push({label:t,loaiVatTu:t,maVatTu:'',donViTinh:''});});
+    out=uniq(out,function(v){return norm([v.label,v.loaiVatTu,v.maVatTu,v.donViTinh].join('|'));});
+    if(out.length>1)out=out.filter(function(v){return String(v.label||v.loaiVatTu||v.maVatTu||'').trim();});
+    return out;
+  }
+  function encVariant(v){try{return encodeURIComponent(JSON.stringify(v||{}));}catch(e){return '';}}
+  function decVariant(s){try{return JSON.parse(decodeURIComponent(String(s||'')));}catch(e){return {};}}
+  function payloadName(base,loai){base=String(base||'').trim();loai=String(loai||'').trim();return base?(loai?base+' - '+loai:base):'';}
+  function setField(tr,k,v){var el=tr&&tr.querySelector('[data-k="'+k+'"]');if(el)el.value=v||'';}
+  function getField(tr,k){var el=tr&&tr.querySelector('[data-k="'+k+'"]');return el?el.value:'';}
+
+  function materialSelectHTML(selectedKey){
+    var cats=materialCatalog(), groups={};
+    cats.forEach(function(c){var g=c.cum||'Khác';(groups[g]=groups[g]||[]).push(c);});
+    var html='<select class="pv30-material-select" onchange="pv30CompleteMaterialChanged(this)"><option value="">-- Chọn vật tư --</option>';
+    Object.keys(groups).sort(function(a,b){return a.localeCompare(b,'vi');}).forEach(function(g){
+      html+='<optgroup label="'+esc(g)+'">';
+      groups[g].forEach(function(c){html+='<option value="'+esc(c.key)+'" '+(c.key===selectedKey?'selected':'')+'>'+esc(c.name)+'</option>';});
+      html+='</optgroup>';
+    });
+    return html+'</select>';
+  }
+  function variantWrapHTML(cum,name,currentLoai,currentMa){
+    var vars=variantsFor(cum,name);
+    currentLoai=String(currentLoai||'').trim();currentMa=String(currentMa||'').trim();
+    if(vars.length>1){
+      var html='<select class="pv30-code-select" title="Chọn loại/mã vật tư" onchange="pv30CompleteVariantChanged(this)"><option value="">-- Chọn loại/mã --</option>';
+      vars.forEach(function(v){
+        var selected=(currentLoai&&(norm(v.loaiVatTu)===norm(currentLoai)||norm(v.label)===norm(currentLoai))) || (currentMa&&norm(v.maVatTu)===norm(currentMa));
+        html+='<option value="'+esc(encVariant(v))+'" '+(selected?'selected':'')+'>'+esc(v.label||v.loaiVatTu||v.maVatTu)+'</option>';
+      });
+      return html+'</select>';
+    }
+    if(vars.length===1 && (vars[0].label||vars[0].loaiVatTu||vars[0].maVatTu)){
+      return '<span class="pv30-code-pill" title="'+esc(vars[0].label||vars[0].loaiVatTu||vars[0].maVatTu)+'">'+esc(vars[0].label||vars[0].loaiVatTu||vars[0].maVatTu)+'</span>';
+    }
+    return '';
+  }
+  function applyFirstVariantIfSingle(tr,cum,name){
+    var vars=variantsFor(cum,name);
+    if(vars.length===1){
+      setField(tr,'loaiVatTu',vars[0].loaiVatTu||'');
+      setField(tr,'maVatTu',vars[0].maVatTu||'');
+      if(vars[0].donViTinh)setField(tr,'donViTinh',vars[0].donViTinh||'');
+    }
+  }
+  window.pv30CompleteMaterialChanged=function(sel){
+    var tr=sel&&sel.closest?sel.closest('tr'):null; if(!tr)return;
+    var cat=findCatalogByKey(sel.value);
+    if(!cat){
+      ['tenVatTu','cumLinhKien','maVatTu','donViTinh','loaiVatTu'].forEach(function(k){setField(tr,k,'');});
+      var emptyWrap=tr.querySelector('[data-pv30-variant-wrap]'); if(emptyWrap)emptyWrap.innerHTML='';
+      return;
+    }
+    setField(tr,'tenVatTu',cat.name);
+    setField(tr,'cumLinhKien',cat.cum);
+    setField(tr,'maVatTu','');
+    setField(tr,'loaiVatTu','');
+    var dvt='';
+    for(var i=0;i<cat.rows.length;i++){dvt=dvtVT(cat.rows[i]);if(dvt)break;}
+    setField(tr,'donViTinh',dvt);
+    applyFirstVariantIfSingle(tr,cat.cum,cat.name);
+    var wrap=tr.querySelector('[data-pv30-variant-wrap]');
+    if(wrap)wrap.innerHTML=variantWrapHTML(cat.cum,cat.name,getField(tr,'loaiVatTu'),getField(tr,'maVatTu'));
+  };
+  window.pv30CompleteVariantChanged=function(sel){
+    var tr=sel&&sel.closest?sel.closest('tr'):null; if(!tr)return;
+    var v=decVariant(sel.value);
+    setField(tr,'loaiVatTu',v.loaiVatTu||'');
+    setField(tr,'maVatTu',v.maVatTu||'');
+    if(v.donViTinh)setField(tr,'donViTinh',v.donViTinh||'');
+  };
+  window.pv30CompleteNameChanged=function(inp){
+    var tr=inp&&inp.closest?inp.closest('tr'):null; if(!tr)return;
+    var name=inp.value||'', cum=getField(tr,'cumLinhKien');
+    setField(tr,'tenVatTu',name); setField(tr,'loaiVatTu',''); setField(tr,'maVatTu','');
+    var wrap=tr.querySelector('[data-pv30-variant-wrap]');
+    if(wrap)wrap.innerHTML=variantWrapHTML(cum,name,'','');
+    applyFirstVariantIfSingle(tr,cum,name);
+  };
+
+  function hiddenFields(x){
+    return '<input type="hidden" data-k="tenVatTu" value="'+esc(x.tenVatTu||'')+'">'+
+      '<input type="hidden" data-k="nguonVatTu" value="'+esc(x.nguonVatTu||'')+'">'+
+      '<input type="hidden" data-k="cumLinhKien" value="'+esc(x.cumLinhKien||'')+'">'+
+      '<input type="hidden" data-k="maVatTu" value="'+esc(x.maVatTu||'')+'">'+
+      '<input type="hidden" data-k="donViTinh" value="'+esc(x.donViTinh||'')+'">'+
+      '<input type="hidden" data-k="loaiVatTu" value="'+esc(x.loaiVatTu||'')+'">';
+  }
+  function dropdownCellHTML(x){
+    var cat=findCatalogForItem(x);
+    var base=cat?cat.name:String(x.tenVatTuGoc||x.tenVatTu||'').trim();
+    var cum=cat?cat.cum:String(x.cumLinhKien||'').trim();
+    var temp={tenVatTu:base,nguonVatTu:x.nguonVatTu||'Phát sinh',cumLinhKien:cum,maVatTu:x.maVatTu||'',donViTinh:x.donViTinh||'',loaiVatTu:x.loaiVatTu||''};
+    return '<div class="pv30-material-cell"><div class="pv30-main">'+materialSelectHTML(cat?cat.key:'')+'</div><span data-pv30-variant-wrap>'+variantWrapHTML(cum,base,temp.loaiVatTu,temp.maVatTu)+'</span></div>'+hiddenFields(temp);
+  }
+  function textCellHTML(x){
+    var base=String(x.tenVatTuGoc||x.tenVatTu||'').trim();
+    var temp={tenVatTu:base,nguonVatTu:x.nguonVatTu||'',cumLinhKien:x.cumLinhKien||'',maVatTu:x.maVatTu||'',donViTinh:x.donViTinh||'',loaiVatTu:x.loaiVatTu||''};
+    return '<div class="pv30-material-cell"><div class="pv30-main"><input value="'+esc(base)+'" oninput="pv30CompleteNameChanged(this)" onchange="pv30CompleteNameChanged(this)"></div><span data-pv30-variant-wrap>'+variantWrapHTML(temp.cumLinhKien,base,temp.loaiVatTu,temp.maVatTu)+'</span></div>'+hiddenFields(temp);
+  }
+  function isPhatSinh(x){return norm((x&&x.loaiDong)||'')==='phat sinh' || norm((x&&x.nguonVatTu)||'')==='phat sinh' || x&&x.__pv30Dropdown;}
+  function completeRowHTML(x,i){
+    x=x||{};
+    var sx=x.soLuongXuatKho||x.soLuongCan||'';
+    var cell=isPhatSinh(x)?dropdownCellHTML(x):textCellHTML(x);
+    return '<tr><td style="text-align:center">'+(i+1)+'</td><td>'+cell+'</td><td><input type="number" min="0" value="'+esc(String(sx))+'" data-k="soLuongXuatKho"></td><td><input type="number" min="0" value="'+esc(String(x.soLuongSuDung||''))+'" data-k="soLuongSuDung"></td><td><input type="number" min="0" value="'+esc(String(x.soLuongNhapKho||''))+'" data-k="soLuongNhapKho"></td><td><select data-k="tinhTrangNhapKho">'+['','Mới','Cũ','Tốt','Hỏng'].map(function(s){return '<option '+(s===(x.tinhTrangNhapKho||'')?'selected':'')+'>'+s+'</option>';}).join('')+'</select></td><td><input value="'+esc(x.ghiChu||'')+'" data-k="ghiChu"></td><td><select data-k="loaiDong"><option '+(String(x.loaiDong||'Chuẩn bị')==='Chuẩn bị'?'selected':'')+'>Chuẩn bị</option><option '+(String(x.loaiDong||'')==='Phát sinh'?'selected':'')+'>Phát sinh</option></select></td></tr>';
+  }
+
+  window.pv17CompleteRowHTML=completeRowHTML;
+  window.pv16CompleteRowHTML=completeRowHTML;
+  window.pv17AddCompleteRow=function(){
+    var tb=document.querySelector('#pv18_complete_table tbody,#pv17_complete_table tbody,#pv16_complete_table tbody');
+    if(!tb)return;
+    tb.insertAdjacentHTML('beforeend',completeRowHTML({loaiDong:'Phát sinh',nguonVatTu:'Phát sinh',__pv30Dropdown:true},tb.children.length));
+  };
+  window.pv16AddCompleteRow=window.pv17AddCompleteRow;
+  window.pv17CollectCompleteItems=function(){
+    return Array.from(document.querySelectorAll('#pv18_complete_table tbody tr,#pv17_complete_table tbody tr,#pv16_complete_table tbody tr')).map(function(tr,i){
+      var obj={stt:i+1};
+      tr.querySelectorAll('[data-k]').forEach(function(el){obj[el.dataset.k]=el.value;});
+      obj.tenVatTuGoc=String(obj.tenVatTu||'').trim();
+      obj.loaiVatTu=String(obj.loaiVatTu||'').trim();
+      obj.tenVatTu=payloadName(obj.tenVatTuGoc,obj.loaiVatTu);
+      obj.soLuongCan=obj.soLuongXuatKho;
+      return obj;
+    }).filter(function(x){return String(x.tenVatTuGoc||x.tenVatTu||'').trim();});
+  };
+  window.pv16CollectCompleteItems=window.pv17CollectCompleteItems;
+})();
+</script>
+
