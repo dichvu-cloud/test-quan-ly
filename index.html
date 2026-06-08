@@ -1611,7 +1611,11 @@ const PHEN_MAP={
 
 // Sheet 4: Cụm → Linh kiện chi tiết
 // PARTS_LOAI_MAP: 'cumName__lkName' → ['mã1','mã2',...] — tải từ cột G Sheet 4 khi Sync
-window.PARTS_LOAI_MAP = {};
+// Dữ liệu hardcode từ cột "Các loại" (cột H) trong Sheet 4 — cập nhật khi Sync Sheet 4
+window.PARTS_LOAI_MAP = {
+  // ── Hệ thống đánh lửa ──
+  'Hệ thống đánh lửa__Bugi': ['BKR6E','DCPR8E','Mar10A-J 4706','BP6ES'],
+};
 const PARTS_MAP={
   'Điều khiển động lực':['Màn hình SmartGen','Relay trung gian 24VDC 10A','Đế Relay trung gian','Aptomat tín hiệu lưới','Aptomat tín hiệu MPĐ','Aptomat động lực lưới','Aptomat động lực MPĐ','Contactor Lưới','Contactor MPĐ','Dây kết nối động lực','Dây kết nối tín hiệu điều khiển','Dây kết nối tín hiệu phản hồi'],
   'Thiết bị điện phụ trợ':['Bóng đèn báo 24VDC xanh','Bóng đèn báo 24VDC đỏ','Quạt điện làm mát','Contactor 3P 18A','Bảo vệ pha','Aptomat C6/C10','Bộ truyền thông','Camera theo dõi','Bóng đèn chiếu sáng','Bóng đèn báo pha 220V','Quạt tản nhiệt 24VDC'],
