@@ -329,7 +329,7 @@ pvBDSCAddFixed = function(){
 function pv16ToggleInclude(id,checked){const it=PV.data.selected.find(x=>x.id===id);if(!it)return;if(it.fixed){it.included=checked;}else if(!checked){PV.data.selected=PV.data.selected.filter(x=>x.id!==id);}pvBDSCRenderVatTuSearch();pvBDSCRenderSelected();}
 const pv16OldSelectMaterial=typeof pvBDSCSelectMaterial==='function'?pvBDSCSelectMaterial:null;
 pvBDSCSelectMaterial=function(id,checked){if(!checked)return;const x=(PV.data.vatTu||[]).find(v=>pvMatId(v)===id);if(!x)return;const qEl=document.getElementById('pvb_qty_'+pvCss(id));const sEl=document.getElementById('pvb_st_'+pvCss(id));const qty=qEl?parseFloat(qEl.value)||1:1;const st=sEl?sEl.value:'Mới';if(!PV.data.selected.find(i=>i.id===id))PV.data.selected.push({id,tenVatTu:pvTenVatTu(x),cumLinhKien:pvCum(x),maVatTu:pvGetObj(x,['Mã vật tư','Ma vat tu'])||'',donViTinh:pvGetObj(x,['ĐVT','Đơn vị tính','DVT'])||'',soLuongCan:qty,tinhTrangXuatKho:st,nguonVatTu:'Chọn thêm',fixed:false,included:true,loaiDong:'Chuẩn bị'});pvBDSCRenderVatTuSearch();pvBDSCRenderSelected();}
-pvBDSCRenderSelected=function(){ if(typeof window.pvBDSCRenderSelected==='function'){window.pvBDSCRenderSelected();return;} const box=document.getElementById('pvb_selectedItems');if(!box)return;if(!PV.data.selected.length){box.innerHTML='<i>Chưa chọn vật tư.</i>';return;}box.innerHTML=PV.data.selected.map(x=>{const cacLoai=(window.PARTS_LOAI_MAP&&window.PARTS_LOAI_MAP[x.cumLinhKien+'__'+x.tenVatTu])||[];const curMaLoai=x.maLoai||'';const loaiCtl=cacLoai.length>0?`<select title="Mã loại" style="border:1.5px solid #a7f3d0;border-radius:6px;padding:3px 6px;font-size:11px;background:#f0fdf4;color:#065f46;font-weight:600;flex-shrink:0;max-width:160px;font-family:monospace" onchange="pvBDSCUpdLoai('${pvJs(x.id)}',this.value)"><option value="">-- Chọn loại --</option>${cacLoai.map(l=>`<option value="${pvEsc(l)}" ${l===curMaLoai?'selected':''}>${pvEsc(l)}</option>`).join('')}</select>` :(curMaLoai?`<span style="font-size:10px;padding:2px 6px;border-radius:99px;background:#eff6ff;color:#1e40af;font-weight:700;font-family:monospace">${pvEsc(curMaLoai)}</span>`:'');const checked=x.included!==false;return `<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--bd);border-radius:8px;margin-bottom:5px;background:${checked?'#fff':'#f8fafc'};flex-wrap:wrap;opacity:${checked?1:.55}"><input type="checkbox" ${checked?'checked':''} onchange="pv16ToggleInclude('${pvJs(x.id)}',this.checked)" style="width:16px;height:16px;accent-color:var(--g)"><div style="flex:1;min-width:120px;font-size:12px"><b>${pvEsc(x.tenVatTu)}</b><br><span style="color:var(--mu)">${pvEsc(x.cumLinhKien)} · ${pvEsc(x.nguonVatTu)}${x.fixed?' · Cố định':''}</span></div>${loaiCtl}<input type="number" min="0" value="${pvEsc(String(x.soLuongCan||''))}" style="width:60px;border:1.5px solid var(--bd);border-radius:6px;padding:3px 6px;font-size:11px;text-align:center" onchange="pvBDSCUpdQty('${pvJs(x.id)}',this.value)"><select style="border:1.5px solid var(--bd);border-radius:6px;padding:3px 5px;font-size:11px" onchange="pvBDSCUpdSt('${pvJs(x.id)}',this.value)">${['Mới','Cũ','Tốt','K.xđ'].map(s=>`<option ${s===x.tinhTrangXuatKho?'selected':''}>${s}</option>`).join('')}</select>${!x.fixed?`<button class="btn bg-r sm" onclick="pvBDSCRemoveMat('${pvJs(x.id)}')">Bỏ</button>`:''}</div>`}).join('');}
+pvBDSCRenderSelected=function(){ _pvBDSCRenderSelectedImpl(); }
 pvBDSCRemoveMat=function(id){PV.data.selected=PV.data.selected.filter(x=>x.id!==id);pvBDSCRenderVatTuSearch();pvBDSCRenderSelected();}
 
 pvBDSCPayload=function(){const md=(document.querySelector('input[name="pvb_mucDich"]:checked')||{}).value||'Bảo dưỡng sửa chữa';const ms=pv16MachineSummary();return {doiTruong:pvBDSCGetVal('pvb_doiTruong'),thanhVien:_pvbTVSelected.slice(),maMay:ms.maMay,tenTrai:ms.tenTrai,donVi:ms.donVi,khuVuc:ms.khuVuc,tinhTP:ms.tinhTP,machines:ms.list,danhSachMaMay:ms.danhSachMaMay,danhSachTenTrai:ms.danhSachTenTrai,ngayGioXuatKho:pvBDSCFmtDT(pvBDSCGetVal('pvb_ngayGioXuatKho')),nguoiXuatKho:pvBDSCGetVal('pvb_nguoiXuatKho'),ngayGioNhapKho:pvBDSCFmtDT(pvBDSCGetVal('pvb_ngayGioNhapKho')),nguoiNhapKho:pvBDSCGetVal('pvb_nguoiNhapKho'),mucDich:md,cuThe:md==='Bảo dưỡng sửa chữa'?(PV.hienTuongSel.join('; ')||'-'):(pvBDSCGetVal('pvb_cuTheNhapTay')||'-'),ghiChu:'',items:(PV.data.selected||[]).filter(x=>x.included!==false).map((x,i)=>({stt:i+1,nguonVatTu:x.nguonVatTu,cumLinhKien:x.cumLinhKien,tenVatTu:x.tenVatTu,maVatTu:x.maVatTu,donViTinh:x.donViTinh,soLuongCan:x.soLuongCan,tinhTrangXuatKho:x.tinhTrangXuatKho,loaiDong:x.loaiDong||'Chuẩn bị',included:true}))};}
@@ -6772,28 +6772,78 @@ function pvBDSCSelectMaterial(id, checked) {
   pvBDSCRenderVatTuSearch(); pvBDSCRenderSelected();
 }
 
-function pvBDSCRenderSelected() {
-  // Gọi về window.pvBDSCRenderSelected để dùng phiên bản có dropdown loại
-  if (window.pvBDSCRenderSelected && window.pvBDSCRenderSelected !== pvBDSCRenderSelected) {
-    window.pvBDSCRenderSelected(); return;
+// ── pvBDSCRenderSelected — hàm duy nhất, có dropdown chọn loại từ PARTS_LOAI_MAP ──
+function _pvBDSCRenderSelectedImpl() {
+  const box = document.getElementById('pvb_selectedItems');
+  if (!box) return;
+  if (!PV.data.selected.length) {
+    box.innerHTML = '<i style="font-size:12px;color:var(--mu)">Chưa chọn vật tư.</i>';
+    return;
   }
-  const box = document.getElementById('pvb_selectedItems'); if (!box) return;
-  if (!PV.data.selected.length) { box.innerHTML='<i style="font-size:12px;color:var(--mu)">Chưa chọn vật tư.</i>'; return; }
   box.innerHTML = PV.data.selected.map(x => {
-    const cacLoai=(window.PARTS_LOAI_MAP&&window.PARTS_LOAI_MAP[x.cumLinhKien+'__'+x.tenVatTu])||[];
-    const curMaLoai=x.maLoai||'';
-    const loaiCtl = cacLoai.length>0
-      ? `<select title="Mã loại" style="border:1.5px solid #a7f3d0;border-radius:6px;padding:3px 6px;font-size:11px;background:#f0fdf4;color:#065f46;font-weight:600;flex-shrink:0;max-width:160px;font-family:monospace" onchange="pvBDSCUpdLoai('${pvJs(x.id)}',this.value)"><option value="">-- Chọn loại --</option>${cacLoai.map(l=>`<option value="${pvEsc(l)}" ${l===curMaLoai?'selected':''}>${pvEsc(l)}</option>`).join('')}</select>`
-      : (curMaLoai ? `<span style="font-size:10px;padding:2px 6px;border-radius:99px;background:#eff6ff;color:#1e40af;font-weight:700;font-family:monospace">${pvEsc(curMaLoai)}</span>` : '');
-    return `<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--bd);border-radius:8px;margin-bottom:5px;background:#fff;flex-wrap:wrap">
-      <div style="flex:1;min-width:120px;font-size:12px"><b>${pvEsc(x.tenVatTu)}</b><br><span style="color:var(--mu)">${pvEsc(x.cumLinhKien)} · ${pvEsc(x.nguonVatTu)}</span></div>
+    const cum = x.cumLinhKien || '';
+    const lk  = x.tenVatTu || '';
+    // Tra PARTS_LOAI_MAP để lấy danh sách mã loại cho vật tư này
+    const loaiArr = (window.PARTS_LOAI_MAP && window.PARTS_LOAI_MAP[cum + '__' + lk]) || [];
+    const curLoai = x.maLoai || '';
+    let loaiCtl = '';
+    if (loaiArr.length > 0) {
+      // Có nhiều loại → dropdown để chọn
+      loaiCtl = `<select title="Chọn mã/loại (Sheet 4 cột G)"
+        style="border:1.5px solid #a7f3d0;border-radius:6px;padding:3px 7px;font-size:11px;background:#f0fdf4;color:#065f46;font-weight:700;flex-shrink:0;max-width:170px;font-family:monospace;cursor:pointer"
+        onchange="pvBDSCUpdLoai('${pvJs(x.id)}',this.value)">
+        <option value="">-- Chọn loại --</option>
+        ${loaiArr.map(l => `<option value="${pvEsc(l)}" ${l === curLoai ? 'selected' : ''}>${pvEsc(l)}</option>`).join('')}
+      </select>`;
+    } else if (curLoai) {
+      // Đã có loại nhưng không có danh sách → hiện badge
+      loaiCtl = `<span style="font-size:10px;padding:2px 7px;border-radius:99px;background:#eff6ff;color:#1e40af;font-weight:700;border:1px solid #bfdbfe;white-space:nowrap;font-family:monospace">${pvEsc(curLoai)}</span>`;
+    }
+    const checked = x.included !== false;
+    return `<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--bd);border-radius:8px;margin-bottom:5px;background:${checked?'#fff':'#f8fafc'};flex-wrap:wrap;opacity:${checked?1:.55}">
+      <input type="checkbox" ${checked?'checked':''} onchange="pv16ToggleInclude('${pvJs(x.id)}',this.checked)" style="width:16px;height:16px;accent-color:var(--g);flex-shrink:0">
+      <div style="flex:1;min-width:120px;font-size:12px"><b>${pvEsc(lk)}</b><br><span style="color:var(--mu);font-size:10px">${pvEsc(cum)} · ${pvEsc(x.nguonVatTu||'')}${x.fixed?' · Cố định':''}</span></div>
       ${loaiCtl}
-      <input type="number" min="0" value="${pvEsc(String(x.soLuongCan))}" style="width:60px;border:1.5px solid var(--bd);border-radius:6px;padding:3px 6px;font-size:11px;text-align:center" onchange="pvBDSCUpdQty('${pvJs(x.id)}',this.value)">
-      <select style="border:1.5px solid var(--bd);border-radius:6px;padding:3px 5px;font-size:11px" onchange="pvBDSCUpdSt('${pvJs(x.id)}',this.value)">${['Mới','Cũ','Tốt','K.xđ'].map(s=>`<option ${s===x.tinhTrangXuatKho?'selected':''}>${s}</option>`).join('')}</select>
-      ${x.fixed ? '<span style="font-size:10px;color:var(--mu)">Cố định</span>' : `<button class="btn bg-r sm" onclick="pvBDSCRemoveMat('${pvJs(x.id)}')">Bỏ</button>`}
+      <input type="number" min="0" value="${pvEsc(String(x.soLuongCan||''))}" style="width:60px;border:1.5px solid var(--bd);border-radius:6px;padding:3px 6px;font-size:11px;text-align:center;flex-shrink:0" onchange="pvBDSCUpdQty('${pvJs(x.id)}',this.value)">
+      <select style="border:1.5px solid var(--bd);border-radius:6px;padding:3px 5px;font-size:11px;flex-shrink:0" onchange="pvBDSCUpdSt('${pvJs(x.id)}',this.value)">${['Mới','Cũ','Tốt','K.xđ'].map(s=>`<option ${s===x.tinhTrangXuatKho?'selected':''}>${s}</option>`).join('')}</select>
+      ${!x.fixed ? `<button class="btn bg-r sm" onclick="pvBDSCRemoveMat('${pvJs(x.id)}')">Bỏ</button>` : ''}
     </div>`;
   }).join('');
 }
+// ── pvBDSCRenderSelected — dropdown chọn loại từ PARTS_LOAI_MAP (cột G Sheet 4) ──
+function _pvBDSCRenderSelectedImpl() {
+  const box = document.getElementById('pvb_selectedItems');
+  if (!box) return;
+  if (!PV.data.selected.length) {
+    box.innerHTML = '<i style="font-size:12px;color:var(--mu)">Chưa chọn vật tư.</i>';
+    return;
+  }
+  box.innerHTML = PV.data.selected.map(x => {
+    const cum = x.cumLinhKien || '';
+    const lk  = x.tenVatTu || '';
+    // Tra PARTS_LOAI_MAP để lấy danh sách mã loại
+    const loaiArr = (window.PARTS_LOAI_MAP && window.PARTS_LOAI_MAP[cum + '__' + lk]) || [];
+    const curLoai = x.maLoai || '';
+    let loaiCtl = '';
+    if (loaiArr.length > 0) {
+      loaiCtl = '<select title="Chọn mã/loại (Sheet 4 cột G)" style="border:1.5px solid #a7f3d0;border-radius:6px;padding:3px 7px;font-size:11px;background:#f0fdf4;color:#065f46;font-weight:700;flex-shrink:0;max-width:170px;font-family:monospace;cursor:pointer" onchange="pvBDSCUpdLoai(\'' + pvJs(x.id) + '\',this.value)"><option value="">-- Chọn loại --</option>' + loaiArr.map(l => '<option value="' + pvEsc(l) + '"' + (l === curLoai ? ' selected' : '') + '>' + pvEsc(l) + '</option>').join('') + '</select>';
+    } else if (curLoai) {
+      loaiCtl = '<span style="font-size:10px;padding:2px 7px;border-radius:99px;background:#eff6ff;color:#1e40af;font-weight:700;border:1px solid #bfdbfe;font-family:monospace">' + pvEsc(curLoai) + '</span>';
+    }
+    const checked = x.included !== false;
+    const stOpts = ['Mới','Cũ','Tốt','K.xđ'].map(s => '<option' + (s===x.tinhTrangXuatKho?' selected':'') + '>' + s + '</option>').join('');
+    return '<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--bd);border-radius:8px;margin-bottom:5px;background:' + (checked?'#fff':'#f8fafc') + ';flex-wrap:wrap;opacity:' + (checked?1:.55) + '">'
+      + '<input type="checkbox" ' + (checked?'checked':'') + ' onchange="pv16ToggleInclude(\'' + pvJs(x.id) + '\',this.checked)" style="width:16px;height:16px;accent-color:var(--g);flex-shrink:0">'
+      + '<div style="flex:1;min-width:120px;font-size:12px"><b>' + pvEsc(lk) + '</b><br><span style="color:var(--mu);font-size:10px">' + pvEsc(cum) + ' · ' + pvEsc(x.nguonVatTu||'') + (x.fixed?' · Cố định':'') + '</span></div>'
+      + loaiCtl
+      + '<input type="number" min="0" value="' + pvEsc(String(x.soLuongCan||'')) + '" style="width:60px;border:1.5px solid var(--bd);border-radius:6px;padding:3px 6px;font-size:11px;text-align:center;flex-shrink:0" onchange="pvBDSCUpdQty(\'' + pvJs(x.id) + '\',this.value)">'
+      + '<select style="border:1.5px solid var(--bd);border-radius:6px;padding:3px 5px;font-size:11px;flex-shrink:0" onchange="pvBDSCUpdSt(\'' + pvJs(x.id) + '\',this.value)">' + stOpts + '</select>'
+      + (!x.fixed ? '<button class="btn bg-r sm" onclick="pvBDSCRemoveMat(\'' + pvJs(x.id) + '\')">Bỏ</button>' : '')
+      + '</div>';
+  }).join('');
+}
+
+function pvBDSCRenderSelected() { _pvBDSCRenderSelectedImpl(); }
 
 function pvBDSCRemoveMat(id) {
   const it = PV.data.selected.find(x=>x.id===id);
@@ -7655,31 +7705,7 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape')['ov-part','ov-view'
 
   // ── Hàm helper lấy danh sách mã loại cho vật tư từ cột G Sheet 4 ──
   // pvBDSCRenderVatTuSearch + SelectMaterial defined above as regular functions
-  window.pvBDSCRenderSelected = function(){
-    const box=document.getElementById('pvb_selectedItems'); if(!box)return;
-    if(!PV.data.selected.length){box.innerHTML='<i style="font-size:12px;color:var(--mu)">Chưa chọn vật tư.</i>';return;}
-    box.innerHTML=PV.data.selected.map(x=>{
-      // Lấy danh sách mã loại từ PARTS_LOAI_MAP (cột G Sheet 4)
-      const cacLoai=(window.PARTS_LOAI_MAP&&window.PARTS_LOAI_MAP[x.cumLinhKien+'__'+x.tenVatTu])||[];
-      const curMaLoai=x.maLoai||'';
-      // Nếu vật tư có nhiều loại → hiện dropdown để chọn/thay đổi
-      const loaiCtl = cacLoai.length>0
-        ? `<select title="Mã loại (Sheet 4 cột G)"
-              style="border:1.5px solid #a7f3d0;border-radius:6px;padding:3px 6px;font-size:11px;background:#f0fdf4;color:#065f46;font-weight:600;flex-shrink:0;max-width:160px;font-family:monospace"
-              onchange="pvBDSCUpdLoai('${pvJs(x.id)}',this.value)">
-              <option value="">-- Chọn loại --</option>
-              ${cacLoai.map(l=>`<option value="${pvEsc(l)}" ${l===curMaLoai?'selected':''}>${pvEsc(l)}</option>`).join('')}
-           </select>`
-        : (curMaLoai ? `<span style="font-size:10px;padding:2px 8px;border-radius:99px;background:#eff6ff;color:#1e40af;font-weight:700;border:1px solid #bfdbfe;white-space:nowrap;font-family:monospace">${pvEsc(curMaLoai)}</span>` : '');
-      return `<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--bd);border-radius:8px;margin-bottom:5px;background:#fff;flex-wrap:wrap">
-        <div style="flex:1;min-width:120px;font-size:12px"><b>${pvEsc(x.tenVatTu)}</b><br><span style="color:var(--mu);font-size:10px">${pvEsc(x.cumLinhKien)} · ${pvEsc(x.nguonVatTu)}</span></div>
-        ${loaiCtl}
-        <input type="number" min="0" value="${pvEsc(String(x.soLuongCan))}" style="width:60px;border:1.5px solid var(--bd);border-radius:6px;padding:3px 6px;font-size:11px;text-align:center" onchange="pvBDSCUpdQty('${pvJs(x.id)}',this.value)">
-        <select style="border:1.5px solid var(--bd);border-radius:6px;padding:3px 5px;font-size:11px" onchange="pvBDSCUpdSt('${pvJs(x.id)}',this.value)">${['Mới','Cũ','Tốt','K.xđ'].map(s=>`<option ${s===x.tinhTrangXuatKho?'selected':''}>${s}</option>`).join('')}</select>
-        ${x.fixed?`<span style="font-size:10px;color:var(--mu)">Cố định</span>`:`<button class="btn bg-r sm" onclick="pvBDSCRemoveMat('${pvJs(x.id)}')">Bỏ</button>`}
-      </div>`;
-    }).join('');
-  };
+  // pvBDSCRenderSelected defined globally above as _pvBDSCRenderSelectedImpl
 })();
 
 /* ──────────────────────────────────────────────────────────
