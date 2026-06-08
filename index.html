@@ -8701,7 +8701,243 @@ nav=function(p){
   setInterval(function(){enableEnterLogin(); if(window.CU)applyLayout();},2000);
 })();
 </script>
+<style id="pv25-dropdown-cac-loai-style">
+  .vt-type-select {
+    border: 1.5px solid var(--g);
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 11px;
+    margin-top: 5px;
+    width: 100%;
+    max-width: 250px;
+    display: block;
+    background: #f0fdf4;
+    color: var(--g);
+    font-weight: 700;
+    outline: none;
+    cursor: pointer;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  }
+  .vt-type-select:focus {
+    box-shadow: 0 0 0 3px rgba(13,110,63,0.15);
+  }
+</style>
 
+<script id="pv25-dropdown-cac-loai-js">
+(function(){
+  // --- Các hàm tiện ích ---
+  function esc(s){return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));}
+  function js(s){return String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'\\"').replace(/\n/g,'\\n').replace(/\r/g,'');}
+  function norm(s){return String(s||'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');}
+  
+  function getObjVal(o, keys){
+    if(!o) return '';
+    for(const k of keys){
+      if(o[k] !== undefined && o[k] !== null && String(o[k]).trim()) return String(o[k]).trim();
+    }
+    return '';
+  }
+
+  // Lấy danh sách "Các loại" từ dữ liệu vật tư tổng
+  function getVatTuTypes(tenVatTu) {
+      // Tách tên gốc (bỏ đi phần "[Mã/Loại: ...]" nếu có)
+      let baseName = (tenVatTu || '').split(' - [Mã/Loại:')[0].trim();
+      
+      let found = null;
+      if(window.PV && PV.data) {
+          // Tìm trong Sheet 4
+          if(PV.data.vatTu) {
+              found = PV.data.vatTu.find(v => norm(getObjVal(v, ['Tên Chi Tiết / Linh Kiện Thay Thế','Tên vật tư','tenVatTu','lk'])) === norm(baseName));
+          }
+          // Tìm trong Sheet 9 (Cố định)
+          if(!found && PV.data.vatTuCoDinh) {
+              found = PV.data.vatTuCoDinh.find(v => norm(getObjVal(v, ['Tên Chi Tiết / Linh Kiện Thay Thế','Tên vật tư','tenVatTu','lk'])) === norm(baseName));
+          }
+      }
+
+      let types = [];
+      if(found) {
+          // Cột chứa danh sách các loại (phân cách bằng dấu phẩy)
+          const str = getObjVal(found, ['Các loại', 'Cac loai', 'Mã loại', 'Các loại mã', 'Các mã', 'Phân loại', 'Các Loại']);
+          if(str) {
+              types = str.split(/[;,]/).map(s => s.trim()).filter(Boolean);
+          }
+      }
+
+      // Xác định loại đang được chọn (nếu là form edit)
+      let currentType = '';
+      const match = (tenVatTu || '').match(/ - \[Mã\/Loại:\s*(.*?)\]$/);
+      if(match) currentType = match[1];
+
+      return { baseName, types, currentType };
+  }
+
+  // =========================================================================
+  // 1. OVERRIDE MÀN HÌNH "TẠO PHIẾU XUẤT VẬT TƯ"
+  // =========================================================================
+  window.pvBDSCRenderSelected = function() {
+      const box = document.getElementById('pvb_selectedItems');
+      if (!box) return;
+      if (!PV.data.selected || !PV.data.selected.length) {
+          box.innerHTML = '<i style="font-size:12px;color:var(--mu)">Chưa chọn vật tư.</i>';
+          return;
+      }
+
+      box.innerHTML = PV.data.selected.map(x => {
+          const checked = x.included !== false;
+          const { baseName, types, currentType } = getVatTuTypes(x.tenVatTu);
+          const phanLoai = x.phanLoai || currentType;
+
+          // Tạo thẻ Select nếu vật tư có nhiều loại
+          let typeDropdown = '';
+          if(types.length > 0) {
+              const options = types.map(t => `<option value="${esc(t)}" ${t===phanLoai ? 'selected' : ''}>${esc(t)}</option>`).join('');
+              typeDropdown = `<select class="vt-type-select" onchange="pvBDSCUpdPhanLoai('${js(x.id)}', this.value)">
+                  <option value="">-- Chọn chi tiết mã / loại --</option>
+                  ${options}
+              </select>`;
+          }
+
+          return `<div class="${checked?'':'pv17-dim'}" style="display:flex;align-items:center;gap:8px;padding:9px 12px;border:1px solid var(--bd);border-radius:8px;margin-bottom:6px;background:#fff;flex-wrap:wrap">
+              <input type="checkbox" ${checked?'checked':''} onchange="pv17ToggleInclude('${js(x.id)}',this.checked)" title="Tích để đưa vào phiếu" style="width:18px;height:18px;accent-color:var(--g);cursor:pointer;flex-shrink:0">
+              <div style="flex:1;min-width:140px;font-size:12px">
+                  <b style="font-size:13px; color:var(--s)">${esc(baseName)}</b>
+                  ${typeDropdown}
+                  <div style="color:var(--mu);margin-top:6px;font-size:11px">📦 ${esc(x.cumLinhKien)} · ${esc(x.nguonVatTu)}</div>
+              </div>
+              <input type="number" min="0" value="${esc(String(x.soLuongCan||''))}" style="width:60px;border:1.5px solid var(--bd);border-radius:6px;padding:6px;font-size:13px;text-align:center;font-weight:800;color:var(--g)" onchange="pvBDSCUpdQty('${js(x.id)}',this.value)">
+              <select style="border:1.5px solid var(--bd);border-radius:6px;padding:5px 6px;font-size:12px;font-weight:600" onchange="pvBDSCUpdSt('${js(x.id)}',this.value)">
+                  ${['Mới','Cũ','Tốt','K.xđ'].map(s=>`<option ${s===x.tinhTrangXuatKho?'selected':''}>${s}</option>`).join('')}
+              </select>
+              <span style="font-size:11px;color:var(--mu);width:55px;text-align:center;font-weight:600">${x.fixed?'Cố định':'C.thêm'}</span>
+              ${x.fixed?'':`<button class="btn bg-r sm" style="padding:4px 10px" onclick="pvBDSCRemoveMat('${js(x.id)}')">✕ Bỏ</button>`}
+          </div>`;
+      }).join('');
+  };
+
+  // Lưu trữ mã phân loại ngược vào Object dữ liệu chuẩn bị Payload gửi Server
+  window.pvBDSCUpdPhanLoai = function(id, val) {
+      const it = (PV.data.selected || []).find(x => x.id === id);
+      if(it) {
+          it.phanLoai = val;
+          const { baseName } = getVatTuTypes(it.tenVatTu);
+          if(val) {
+              it.tenVatTu = `${baseName} - [Mã/Loại: ${val}]`;
+          } else {
+              it.tenVatTu = baseName;
+          }
+      }
+  };
+
+  // =========================================================================
+  // 2. OVERRIDE MÀN HÌNH "HOÀN THÀNH PHIẾU VẬT TƯ"
+  // =========================================================================
+  const PHAT_SINH = 'Phát sinh';
+  const CHUAN_BI = 'Chuẩn bị';
+
+  // Chèn Dropdown vào hàng chi tiết vật tư đang hiển thị
+  window.pv17CompleteRowHTML = function(x, i) {
+      x = x || {};
+      const sx = x.soLuongXuatKho || x.soLuongCan || '';
+      const loai = String(x.loaiDong || (!String(x.tenVatTu||'').trim() ? PHAT_SINH : CHUAN_BI));
+      const isPhatSinh = norm(loai) === norm(PHAT_SINH) || norm(x.nguonVatTu||'') === norm(PHAT_SINH) || !String(x.tenVatTu||'').trim();
+
+      const { baseName, types, currentType } = getVatTuTypes(x.tenVatTu);
+      let matCtl = '';
+
+      if(isPhatSinh) {
+           // Giữ nguyên Select chọn Tên vật tư theo hệ thống cũ
+           matCtl = `<select class="pv19-mat-select" data-k="tenVatTu" onchange="pv19OnMatSelect(this)">${window.pv19MatOptionsHTML ? window.pv19MatOptionsHTML(baseName||'', null) : ''}</select>`;
+      } else {
+           // Vật tư đã chuẩn bị trước -> Text input readonly
+           matCtl = `<input value="${esc(baseName||'')}" data-k="tenVatTu" readonly style="background:#f8fafc; font-weight:700; color:var(--s2)">`;
+      }
+
+      // Xử lý tạo HTML Select cho loại vật tư (nếu có)
+      let typeDropdown = '';
+      if(types.length > 0) {
+          const options = types.map(t => `<option value="${esc(t)}" ${t===currentType?'selected':''}>${esc(t)}</option>`).join('');
+          typeDropdown = `<select data-k="phanLoai" class="vt-type-select">
+              <option value="">-- Chọn chi tiết mã / loại --</option>
+              ${options}
+          </select>`;
+      } else {
+          // Lưu hidden state nếu ko tìm thấy
+          typeDropdown = `<input type="hidden" data-k="phanLoai" value="${esc(currentType)}">`;
+      }
+
+      return `<tr>
+          <td style="text-align:center;font-weight:800;color:var(--mu)">${i+1}</td>
+          <td style="vertical-align:top">
+              ${matCtl}
+              ${typeDropdown}
+              <input type="hidden" data-k="nguonVatTu" value="${esc(x.nguonVatTu||'')}">
+              <input type="hidden" data-k="cumLinhKien" value="${esc(x.cumLinhKien||'')}">
+              <input type="hidden" data-k="maVatTu" value="${esc(x.maVatTu||'')}">
+              <input type="hidden" data-k="donViTinh" value="${esc(x.donViTinh||'')}">
+          </td>
+          <td style="vertical-align:top"><input type="number" min="0" value="${esc(String(sx))}" data-k="soLuongXuatKho" style="font-weight:700;text-align:center"></td>
+          <td style="vertical-align:top"><input type="number" min="0" value="${esc(String(x.soLuongSuDung||''))}" data-k="soLuongSuDung" style="font-weight:800;text-align:center;color:var(--g)"></td>
+          <td style="vertical-align:top"><input type="number" min="0" value="${esc(String(x.soLuongNhapKho||''))}" data-k="soLuongNhapKho" style="font-weight:800;text-align:center;color:var(--bl)"></td>
+          <td style="vertical-align:top"><select data-k="tinhTrangNhapKho">${['','Mới','Cũ','Tốt','Hỏng'].map(s=>`<option ${s===(x.tinhTrangNhapKho||'')?'selected':''}>${s}</option>`).join('')}</select></td>
+          <td style="vertical-align:top"><input value="${esc(x.ghiChu||'')}" data-k="ghiChu"></td>
+          <td style="vertical-align:top"><select data-k="loaiDong" onchange="pv19OnLoaiDongChange(this)"><option ${norm(loai)===norm(CHUAN_BI)?'selected':''}>${CHUAN_BI}</option><option ${norm(loai)===norm(PHAT_SINH)?'selected':''}>${PHAT_SINH}</option></select></td>
+      </tr>`;
+  };
+
+  // Cập nhật Select "Các loại" ngay lập tức khi người dùng chọn tên vật tư "Phát sinh" mới
+  const old_pv19OnMatSelect = window.pv19OnMatSelect;
+  window.pv19OnMatSelect = function(sel) {
+      if(old_pv19OnMatSelect) old_pv19OnMatSelect(sel);
+      const tr = sel.closest('tr');
+      if(!tr) return;
+
+      const baseName = sel.value;
+      const td = sel.closest('td');
+
+      // Xoá Select cũ nếu tồn tại
+      let typeSelect = td.querySelector('select[data-k="phanLoai"]');
+      let typeHidden = td.querySelector('input[type="hidden"][data-k="phanLoai"]');
+      if(typeSelect) typeSelect.remove();
+      if(typeHidden) typeHidden.remove();
+
+      // Dựng Select mới theo loại vật tư tương ứng
+      const { types } = getVatTuTypes(baseName);
+      if(types.length > 0) {
+          const options = types.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
+          const html = `<select data-k="phanLoai" class="vt-type-select">
+              <option value="">-- Chọn chi tiết mã / loại --</option>
+              ${options}
+          </select>`;
+          sel.insertAdjacentHTML('afterend', html);
+      } else {
+           sel.insertAdjacentHTML('afterend', `<input type="hidden" data-k="phanLoai" value="">`);
+      }
+  };
+
+  // Override hàm Gom dữ liệu "Hoàn thành" để ghép lại mã phân loại vào tên
+  window.pv17CollectCompleteItems = function() {
+      return Array.from(document.querySelectorAll('#pv18_complete_table tbody tr, #pv17_complete_table tbody tr')).map((tr,i)=>{
+          const obj = {stt: i+1};
+          tr.querySelectorAll('[data-k]').forEach(el => {
+              obj[el.dataset.k] = el.value;
+          });
+
+          const base = obj.tenVatTu || '';
+          const type = obj.phanLoai || '';
+          if(type) {
+              obj.tenVatTu = `${base} - [Mã/Loại: ${type}]`;
+          } else {
+              obj.tenVatTu = base;
+          }
+
+          obj.soLuongCan = obj.soLuongXuatKho;
+          return obj;
+      }).filter(x => String(x.tenVatTu || '').trim());
+  };
+
+})();
+</script>
 <script id="pv25-xuat-phieu-loai-vattu-dropdown">
 (function(){
   if(window.__pv25XuatPhieuLoaiVatTuDropdown)return;
