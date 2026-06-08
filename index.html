@@ -9009,3 +9009,335 @@ nav=function(p){
   setTimeout(boot,800);setTimeout(boot,2500);setInterval(boot,15000);
 })();
 </script>
+
+<!-- V28 hotfix: mo phieu vat tu nhanh + khoa layout khong lech phai -->
+<style id="pv28-fast-material-layout-style">
+  @media (min-width:769px){
+    html,body{
+      height:auto !important;
+      min-height:100% !important;
+      overflow-y:auto !important;
+      overflow-x:hidden !important;
+    }
+    #app{
+      display:flex !important;
+      flex-direction:column !important;
+      min-height:100vh !important;
+      height:auto !important;
+      padding-top:54px !important;
+      overflow:visible !important;
+    }
+    .topbar{
+      position:fixed !important;
+      top:0 !important;
+      left:0 !important;
+      right:0 !important;
+      width:100% !important;
+      height:54px !important;
+      min-height:54px !important;
+      z-index:3000 !important;
+    }
+    .layout{
+      display:flex !important;
+      align-items:flex-start !important;
+      width:100% !important;
+      min-height:calc(100vh - 54px) !important;
+      height:auto !important;
+      margin:0 !important;
+      padding:0 !important;
+      overflow:visible !important;
+    }
+    .sidebar{
+      position:sticky !important;
+      top:54px !important;
+      left:auto !important;
+      bottom:auto !important;
+      width:206px !important;
+      min-width:206px !important;
+      max-width:206px !important;
+      flex:0 0 206px !important;
+      height:calc(100vh - 54px) !important;
+      overflow-y:auto !important;
+      overflow-x:hidden !important;
+      transform:none !important;
+      box-shadow:none !important;
+      z-index:1000 !important;
+    }
+    .content{
+      position:relative !important;
+      flex:1 1 auto !important;
+      min-width:0 !important;
+      width:auto !important;
+      max-width:none !important;
+      height:auto !important;
+      min-height:calc(100vh - 54px) !important;
+      margin:0 !important;
+      padding:0 !important;
+      overflow:visible !important;
+      background:var(--bg) !important;
+      box-sizing:border-box !important;
+    }
+    #pg-taoPhieu,
+    #pg-danhSachPhieu,
+    #pg-hoanThanhPhieu{
+      display:none;
+      width:100% !important;
+      max-width:none !important;
+      min-height:auto !important;
+      margin:0 !important;
+      padding:16px 20px 110px 20px !important;
+      overflow:visible !important;
+      box-sizing:border-box !important;
+      transform:none !important;
+    }
+    #pg-taoPhieu.on,
+    #pg-danhSachPhieu.on,
+    #pg-hoanThanhPhieu.on{display:block !important;}
+    #pg-taoPhieu > .ph,
+    #pg-danhSachPhieu > .ph,
+    #pg-hoanThanhPhieu > .ph,
+    #pvFormRoot,
+    #pvHistoryRoot,
+    #pvCompleteRoot,
+    #pvb_formWrap{
+      width:100% !important;
+      max-width:none !important;
+      margin-left:0 !important;
+      margin-right:0 !important;
+      padding-left:0 !important;
+      padding-right:0 !important;
+      box-sizing:border-box !important;
+      text-align:left !important;
+    }
+    #pvb_formWrap .fsec,
+    #pvFormRoot .card,
+    #pvHistoryRoot .card,
+    #pvCompleteRoot .card{
+      width:100% !important;
+      max-width:none !important;
+      margin-left:0 !important;
+      margin-right:0 !important;
+      box-sizing:border-box !important;
+    }
+  }
+  @media (max-width:768px){
+    #app{padding-top:50px !important;}
+    .content{width:100% !important;max-width:100% !important;margin-left:0 !important;}
+    #pg-taoPhieu,#pg-danhSachPhieu,#pg-hoanThanhPhieu{padding:14px 10px 100px 10px !important;}
+  }
+</style>
+<script id="pv28-fast-material-layout-js">
+(function(){
+  if(window.__pv28FastMaterialLayoutFix)return;
+  window.__pv28FastMaterialLayoutFix=true;
+
+  var DESKTOP_TOP=54, MOBILE_TOP=50, SIDEBAR_W=206;
+  function isDesk(){return window.innerWidth>768;}
+  function setImp(el,p,v){if(el&&el.style)el.style.setProperty(p,v,'important');}
+  function idle(fn,delay){
+    delay=delay||0;
+    if('requestIdleCallback' in window) return setTimeout(function(){requestIdleCallback(fn,{timeout:1200});},delay);
+    return setTimeout(fn,delay||0);
+  }
+  function readListCache(){
+    try{if(typeof pvBDSCReadListCache_==='function')return pvBDSCReadListCache_()||[];}catch(e){}
+    try{return JSON.parse(localStorage.getItem('EGREEN_PV_LIST_CACHE_V15')||'[]')||[];}catch(e){return [];}  
+  }
+
+  // Chan cac hotfix cu ep .content margin-left:206px / width:calc(...) lam trang vat tu bi lech phai.
+  try{
+    var nativeSet=CSSStyleDeclaration.prototype.setProperty;
+    if(nativeSet && !nativeSet.__pv28Patched){
+      var patched=function(prop,value,priority){
+        try{
+          var desk=isDesk();
+          var content=document.querySelector('.content');
+          var sidebar=document.getElementById('mainSidebar')||document.querySelector('.sidebar');
+          if(desk && content && this===content.style){
+            if(prop==='margin-left' || prop==='margin') value='0';
+            if((prop==='width'||prop==='max-width') && String(value).indexOf('206px')>=0) value=(prop==='width'?'auto':'none');
+          }
+          if(desk && sidebar && this===sidebar.style){
+            if(prop==='position' && value==='fixed') value='sticky';
+            if(prop==='left' || prop==='bottom') value='auto';
+          }
+        }catch(e){}
+        return nativeSet.call(this,prop,value,priority);
+      };
+      patched.__pv28Patched=true;
+      CSSStyleDeclaration.prototype.setProperty=patched;
+    }
+  }catch(e){}
+
+  function applyLayout(){
+    try{
+      var desk=isDesk(), h=desk?DESKTOP_TOP:MOBILE_TOP;
+      var app=document.getElementById('app');
+      var topbar=document.querySelector('.topbar');
+      var layout=document.querySelector('.layout');
+      var sidebar=document.getElementById('mainSidebar')||document.querySelector('.sidebar');
+      var content=document.querySelector('.content');
+      document.documentElement.style.setProperty('--pv24-topbar-h',DESKTOP_TOP+'px');
+      document.documentElement.style.setProperty('--pv24-mobile-topbar-h',MOBILE_TOP+'px');
+      document.documentElement.style.setProperty('--pv24-sidebar-w',SIDEBAR_W+'px');
+      setImp(document.documentElement,'overflow-y','auto');
+      setImp(document.body,'overflow-y','auto');
+      setImp(document.body,'overflow-x','hidden');
+      setImp(document.body,'position','static');
+      if(app){setImp(app,'padding-top',h+'px');setImp(app,'height','auto');setImp(app,'min-height','100vh');setImp(app,'overflow','visible');}
+      if(topbar){setImp(topbar,'position','fixed');setImp(topbar,'top','0');setImp(topbar,'left','0');setImp(topbar,'right','0');setImp(topbar,'width','100%');setImp(topbar,'height',h+'px');setImp(topbar,'min-height',h+'px');setImp(topbar,'z-index','3000');}
+      if(layout){setImp(layout,'display','flex');setImp(layout,'align-items','flex-start');setImp(layout,'width','100%');setImp(layout,'height','auto');setImp(layout,'min-height','calc(100vh - '+h+'px)');setImp(layout,'margin','0');setImp(layout,'padding','0');setImp(layout,'overflow','visible');}
+      if(sidebar){
+        if(desk){sidebar.classList.remove('open');setImp(sidebar,'position','sticky');setImp(sidebar,'top',h+'px');setImp(sidebar,'left','auto');setImp(sidebar,'bottom','auto');setImp(sidebar,'width',SIDEBAR_W+'px');setImp(sidebar,'min-width',SIDEBAR_W+'px');setImp(sidebar,'max-width',SIDEBAR_W+'px');setImp(sidebar,'flex','0 0 '+SIDEBAR_W+'px');setImp(sidebar,'height','calc(100vh - '+h+'px)');setImp(sidebar,'overflow-y','auto');setImp(sidebar,'overflow-x','hidden');setImp(sidebar,'transform','none');setImp(sidebar,'box-shadow','none');}
+        else{setImp(sidebar,'top',h+'px');setImp(sidebar,'height','calc(100vh - '+h+'px)');}
+      }
+      if(content){setImp(content,'position','relative');setImp(content,'flex','1 1 auto');setImp(content,'min-width','0');setImp(content,'width',desk?'auto':'100%');setImp(content,'max-width',desk?'none':'100%');setImp(content,'height','auto');setImp(content,'min-height','calc(100vh - '+h+'px)');setImp(content,'margin','0');setImp(content,'padding','0');setImp(content,'overflow','visible');}
+      ['pg-taoPhieu','pg-danhSachPhieu','pg-hoanThanhPhieu'].forEach(function(id){var pg=document.getElementById(id);if(!pg)return;setImp(pg,'width','100%');setImp(pg,'max-width','none');setImp(pg,'margin','0');setImp(pg,'padding',desk?'16px 20px 110px 20px':'14px 10px 100px 10px');setImp(pg,'overflow','visible');setImp(pg,'transform','none');});
+      var ov=document.getElementById('mobOverlay'); if(desk&&ov)ov.classList.remove('show');
+    }catch(e){}
+  }
+  window.pv28ApplyMaterialLayout=applyLayout;
+
+  var oldFast=window.pvBDSCRefreshFastData_;
+  if(typeof oldFast==='function'){
+    window.pvBDSCRefreshFastData_=function(){
+      // Cap nhat du lieu cache/local, khong render lai search/dropdown khi poll.
+      return oldFast.call(this,false);
+    };
+  }
+
+  var oldHistory=window.pvBDSCRefreshHistory_;
+  if(typeof oldHistory==='function'){
+    window.pvBDSCRefreshHistory_=async function(silent,force){
+      if(window.curPage==='taoPhieu' && !force){
+        var cached=window._pvBDSCListCache||readListCache();
+        return Promise.resolve(cached||[]);
+      }
+      return oldHistory.call(this,silent);
+    };
+  }
+
+  var oldSync=window.pvBDSCSyncInBackground_;
+  if(typeof oldSync==='function'){
+    window.pvBDSCSyncInBackground_=async function(force){
+      var now=Date.now();
+      var last=Number(localStorage.getItem('EGREEN_PV28_LAST_APP_SYNC')||0);
+      if(!force && now-last<5*60*1000)return null;
+      localStorage.setItem('EGREEN_PV28_LAST_APP_SYNC',String(now));
+      var oldSearch=window.pvBDSCRenderVatTuSearch;
+      var oldSelected=window.pvBDSCRenderSelected;
+      var suppress=window.curPage==='taoPhieu';
+      if(suppress){
+        if(typeof oldSearch==='function')window.pvBDSCRenderVatTuSearch=function(){};
+        if(typeof oldSelected==='function')window.pvBDSCRenderSelected=function(){};
+      }
+      try{return await oldSync.call(this);}catch(e){throw e;}
+      finally{
+        if(suppress){
+          if(typeof oldSearch==='function')window.pvBDSCRenderVatTuSearch=oldSearch;
+          if(typeof oldSelected==='function')window.pvBDSCRenderSelected=oldSelected;
+          idle(function(){
+            if(window.curPage!=='taoPhieu')return;
+            try{if(typeof oldSearch==='function')oldSearch();if(typeof oldSelected==='function')oldSelected();}catch(e){}
+          },200);
+        }
+      }
+    };
+  }
+
+  var oldRenderForm=window.pvBDSCRenderForm;
+  var renderSeq=0;
+  if(typeof oldRenderForm==='function'){
+    window.pvBDSCRenderForm=function(){
+      var seq=++renderSeq;
+      var oldSearch=window.pvBDSCRenderVatTuSearch;
+      if(typeof oldSearch==='function')window.pvBDSCRenderVatTuSearch=function(){};
+      try{return oldRenderForm.apply(this,arguments);}
+      finally{
+        if(typeof oldSearch==='function')window.pvBDSCRenderVatTuSearch=oldSearch;
+        applyLayout();
+        idle(function(){
+          if(seq!==renderSeq || window.curPage!=='taoPhieu')return;
+          try{if(typeof oldSearch==='function')oldSearch();}catch(e){}
+          applyLayout();
+        },80);
+      }
+    };
+  }
+
+  var oldStart=window.pvBDSCStartPolling_;
+  window.pvBDSCStartPolling_=function(){
+    if(window.__pv28PollStarted)return;
+    window.__pv28PollStarted=true;
+    try{if(typeof oldStart==='function'&&!window.__pv28SkipOldPoll){} }catch(e){}
+    setInterval(function(){
+      if(!window.CU)return;
+      try{if(typeof window.pvBDSCRefreshFastData_==='function')window.pvBDSCRefreshFastData_(false);}catch(e){}
+      if(window.curPage==='danhSachPhieu'||window.curPage==='hoanThanhPhieu'){
+        try{if(typeof window.pvBDSCRefreshHistory_==='function')window.pvBDSCRefreshHistory_(true,true);}catch(e){}
+      }
+    },60000);
+  };
+
+  var oldInit=window.pvBDSCInit;
+  window.pvBDSCInit=function(view){
+    if(view!=='form'){
+      if(typeof oldInit==='function')return oldInit.apply(this,arguments);
+      return;
+    }
+    var root=document.getElementById('pvFormRoot');
+    if(!window.CU){
+      if(root)root.innerHTML='<div class="card"><div class="cb" style="color:#991b1b;font-weight:700">Ban chua dang nhap he thong BDSC.</div></div>';
+      return;
+    }
+    if(!window.PV)window.PV={data:{},user:null,selected:[]};
+    window.PV.token='';
+    window.PV.user={u:CU.u||'',username:CU.u||CU.username||'',name:CU.name||CU.fullName||'',fullName:CU.name||CU.fullName||'',role:CU.role||'ktv',status:CU.status||'active'};
+    try{if(typeof window.pvBDSCRefreshFastData_==='function')window.pvBDSCRefreshFastData_(false);}catch(e){}
+    try{if(typeof window.pvBDSCStartPolling_==='function')window.pvBDSCStartPolling_();}catch(e){}
+    try{if(typeof window.pvBDSCRenderForm==='function')window.pvBDSCRenderForm();}
+    catch(e){if(root)root.innerHTML='<div class="card"><div class="cb" style="color:var(--red)">Loi mo form vat tu: '+(e.message||e)+'</div></div>';}
+    idle(function(){try{if(typeof window.pvBDSCSyncInBackground_==='function')window.pvBDSCSyncInBackground_();}catch(e){}},1200);
+  };
+
+  function showMaterialPage(p){
+    if(window.innerWidth<=768 && typeof closeSidebar==='function')closeSidebar();
+    document.querySelectorAll('.page').forEach(function(x){x.classList.remove('on');});
+    document.querySelectorAll('.nitem').forEach(function(x){x.classList.remove('on');});
+    var page=document.getElementById('pg-'+p); if(page)page.classList.add('on');
+    var item=document.getElementById('ni-'+p); if(item)item.classList.add('on');
+    window.curPage=p;
+    applyLayout();
+  }
+
+  var oldNav=window.nav;
+  window.nav=function(p){
+    if(p==='taoPhieu'){
+      showMaterialPage('taoPhieu');
+      try{window.pvBDSCInit('form');}catch(e){console.warn(e);} 
+      applyLayout();
+      return;
+    }
+    if(p==='danhSachPhieu'){
+      showMaterialPage('danhSachPhieu');
+      try{if(typeof oldInit==='function')oldInit.call(this,'history');}catch(e){console.warn(e);} 
+      applyLayout();
+      return;
+    }
+    if(p==='hoanThanhPhieu'){
+      showMaterialPage('hoanThanhPhieu');
+      try{if(typeof window.pvBDSCStartPolling_==='function')window.pvBDSCStartPolling_();}catch(e){}
+      try{if(typeof window.pv17RenderCompletePage==='function')window.pv17RenderCompletePage();else if(typeof window.pv16RenderCompletePage==='function')window.pv16RenderCompletePage();}catch(e){console.warn(e);} 
+      applyLayout();
+      return;
+    }
+    if(typeof oldNav==='function')return oldNav.apply(this,arguments);
+  };
+
+  function boot(){applyLayout();setTimeout(applyLayout,80);setTimeout(applyLayout,500);setTimeout(applyLayout,1500);}
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
+  window.addEventListener('load',boot);
+  window.addEventListener('resize',function(){clearTimeout(window.__pv28ResizeT);window.__pv28ResizeT=setTimeout(applyLayout,80);});
+})();
+</script>
+
