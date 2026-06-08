@@ -5232,26 +5232,16 @@ async function syncSheet(num){
   }
 
   // ── Sheet 4 → PARTS_MAP ────────────────────────────────────
-  // Cấu trúc: A=Tên cụm, B=Tên linh kiện, C=Các loại (tuỳ chọn, phân cách ';' hoặc ',')
-  // items=[{cum:'Tên cụm', lk:'Tên linh kiện', loai:'Loại 1; Loại 2'}]
+  // Cấu trúc thực tế: A=Tên cụm (trùng nhiều dòng), B=Tên linh kiện
+  // items=[{cum:'Tên cụm', lk:'Tên linh kiện'}]
   if(num==='4'){
     const items=d.items||[];
     if(items.length){
       Object.keys(PARTS_MAP).forEach(k=>delete PARTS_MAP[k]);
-      if(!window.PARTS_LOAI_MAP) window.PARTS_LOAI_MAP={};
-      Object.keys(window.PARTS_LOAI_MAP).forEach(k=>delete window.PARTS_LOAI_MAP[k]);
-      items.forEach(({cum,lk,loai})=>{
+      items.forEach(({cum,lk})=>{
         if(!cum) return;
         if(!PARTS_MAP[cum]) PARTS_MAP[cum]=[];
         if(lk && !PARTS_MAP[cum].includes(lk)) PARTS_MAP[cum].push(lk);
-        // Lưu các loại nếu có (cột C)
-        if(lk && loai){
-          const loaiArr = String(loai).split(/[;,，]+/).map(x=>x.trim()).filter(Boolean);
-          if(loaiArr.length>0){
-            const key = cum+'___'+lk;
-            window.PARTS_LOAI_MAP[key] = loaiArr;
-          }
-        }
       });
       renderPhenDb();
       toast(`✅ Sheet 4: ${Object.keys(PARTS_MAP).length} cụm linh kiện`,'ok');
@@ -6730,17 +6720,11 @@ function pvBDSCRenderVatTuSearch() {
   if (!list.length) { box.innerHTML='<div class="sug-empty">Không có vật tư phù hợp.</div>'; return; }
   const groups = {};
   list.forEach(x=>{const g=pvCum(x)||'Khác';(groups[g]=groups[g]||[]).push(x);});
-  // Helper: get loai options for a part
-  function getLoaiOpts(cum, tenVatTu) {
-    const pm = window.PARTS_LOAI_MAP || {};
-    return pm[cum+'___'+tenVatTu] || [];
-  }
   box.innerHTML = Object.keys(groups).sort().map(g=>`
     <div>
       <div style="padding:6px 10px;font-size:10px;font-weight:800;color:#083d24;background:#e8f7f0;text-transform:uppercase;letter-spacing:.5px;position:sticky;top:0">${pvEsc(g)}</div>
-      ${groups[g].map(x=>{const id=pvMatId(x);const loaiOpts=getLoaiOpts(pvCum(x)||'',pvTenVatTu(x));return `<div class="pi-row" style="display:flex;align-items:center;gap:8px;padding:7px 10px;border-bottom:1px solid #f1f5f9;flex-wrap:wrap">
+      ${groups[g].map(x=>{const id=pvMatId(x);return `<div class="pi-row" style="display:flex;align-items:center;gap:8px;padding:7px 10px;border-bottom:1px solid #f1f5f9">
         <div style="flex:1;font-size:12px;min-width:0"><b>${pvEsc(pvTenVatTu(x))}</b><span style="color:var(--mu);margin-left:6px">${pvEsc(g)}</span></div>
-        ${loaiOpts.length>0?`<select id="pvb_loai_${pvCss(id)}" style="border:1.5px solid #a7f3d0;border-radius:6px;padding:3px 6px;font-size:11px;flex-shrink:0;background:#f0fdf4;color:#065f46;font-weight:600"><option value="">Chọn loại...</option>${loaiOpts.map(l=>`<option value="${pvEsc(l)}">${pvEsc(l)}</option>`).join('')}</select>`:''}
         <input id="pvb_qty_${pvCss(id)}" type="number" min="0" value="1" style="width:60px;border:1.5px solid var(--bd);border-radius:6px;padding:3px 6px;font-size:11px;text-align:center;flex-shrink:0">
         <select id="pvb_st_${pvCss(id)}" style="border:1.5px solid var(--bd);border-radius:6px;padding:3px 5px;font-size:11px;flex-shrink:0"><option>Mới</option><option>Cũ</option><option>Tốt</option><option>K.xđ</option></select>
         <input type="checkbox" onchange="pvBDSCSelectMaterial('${pvJs(id)}',this.checked)" style="width:16px;height:16px;accent-color:var(--g);flex-shrink:0;cursor:pointer">
@@ -6753,35 +6737,23 @@ function pvBDSCSelectMaterial(id, checked) {
   const x = (PV.data.vatTu||[]).find(v=>pvMatId(v)===id); if (!x) return;
   const qEl = document.getElementById('pvb_qty_'+pvCss(id));
   const sEl = document.getElementById('pvb_st_'+pvCss(id));
-  const loaiEl = document.getElementById('pvb_loai_'+pvCss(id));
   const qty = qEl ? parseFloat(qEl.value)||1 : 1;
   const st  = sEl ? sEl.value : 'Mới';
-  const loai = loaiEl ? loaiEl.value : '';
   if (!PV.data.selected.find(i=>i.id===id))
-    PV.data.selected.push({id, tenVatTu:pvTenVatTu(x), cumLinhKien:pvCum(x), maVatTu:pvGetObj(x,['Mã vật tư','Ma vat tu'])||'', donViTinh:pvGetObj(x,['ĐVT','Đơn vị tính','DVT'])||'', soLuongCan:qty, tinhTrangXuatKho:st, loaiVatTu:loai, nguonVatTu:'Chọn thêm', fixed:false});
+    PV.data.selected.push({id, tenVatTu:pvTenVatTu(x), cumLinhKien:pvCum(x), maVatTu:pvGetObj(x,['Mã vật tư','Ma vat tu'])||'', donViTinh:pvGetObj(x,['ĐVT','Đơn vị tính','DVT'])||'', soLuongCan:qty, tinhTrangXuatKho:st, nguonVatTu:'Chọn thêm', fixed:false});
   pvBDSCRenderVatTuSearch(); pvBDSCRenderSelected();
 }
 
 function pvBDSCRenderSelected() {
   const box = document.getElementById('pvb_selectedItems'); if (!box) return;
   if (!PV.data.selected.length) { box.innerHTML='<i style="font-size:12px;color:var(--mu)">Chưa chọn vật tư.</i>'; return; }
-  function getLoaiOpts(cumLinhKien, tenVatTu) {
-    const pm = window.PARTS_LOAI_MAP || {};
-    return pm[cumLinhKien+'___'+tenVatTu] || [];
-  }
-  box.innerHTML = PV.data.selected.map(x => {
-    const loaiOpts = getLoaiOpts(x.cumLinhKien||'', x.tenVatTu||'');
-    const loaiCtl = loaiOpts.length>0
-      ? `<select style="border:1.5px solid #a7f3d0;border-radius:6px;padding:3px 6px;font-size:11px;background:#f0fdf4;color:#065f46;font-weight:600" onchange="pvBDSCUpdLoai('${pvJs(x.id)}',this.value)"><option value="">Chọn loại...</option>${loaiOpts.map(l=>`<option value="${pvEsc(l)}" ${l===x.loaiVatTu?'selected':''}>${pvEsc(l)}</option>`).join('')}</select>`
-      : (x.loaiVatTu ? `<span style="font-size:11px;padding:2px 8px;background:#f0fdf4;border-radius:6px;color:#065f46;border:1px solid #a7f3d0">${pvEsc(x.loaiVatTu)}</span>` : '');
-    return `<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--bd);border-radius:8px;margin-bottom:5px;background:#fff;flex-wrap:wrap">
+  box.innerHTML = PV.data.selected.map(x => `
+    <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--bd);border-radius:8px;margin-bottom:5px;background:#fff;flex-wrap:wrap">
       <div style="flex:1;min-width:120px;font-size:12px"><b>${pvEsc(x.tenVatTu)}</b><br><span style="color:var(--mu)">${pvEsc(x.cumLinhKien)} · ${pvEsc(x.nguonVatTu)}</span></div>
-      ${loaiCtl}
       <input type="number" min="0" value="${pvEsc(String(x.soLuongCan))}" style="width:60px;border:1.5px solid var(--bd);border-radius:6px;padding:3px 6px;font-size:11px;text-align:center" onchange="pvBDSCUpdQty('${pvJs(x.id)}',this.value)">
       <select style="border:1.5px solid var(--bd);border-radius:6px;padding:3px 5px;font-size:11px" onchange="pvBDSCUpdSt('${pvJs(x.id)}',this.value)">${['Mới','Cũ','Tốt','K.xđ'].map(s=>`<option ${s===x.tinhTrangXuatKho?'selected':''}>${s}</option>`).join('')}</select>
       ${x.fixed ? '<span style="font-size:10px;color:var(--mu)">Cố định</span>' : `<button class="btn bg-r sm" onclick="pvBDSCRemoveMat('${pvJs(x.id)}')">Bỏ</button>`}
-    </div>`;
-  }).join('');
+    </div>`).join('');
 }
 
 function pvBDSCRemoveMat(id) {
@@ -6793,7 +6765,6 @@ function pvBDSCRemoveMat(id) {
 
 function pvBDSCUpdQty(id,v) { const it=PV.data.selected.find(x=>x.id===id); if(it) it.soLuongCan=parseFloat(v)||0; }
 function pvBDSCUpdSt(id,v)  { const it=PV.data.selected.find(x=>x.id===id); if(it) it.tinhTrangXuatKho=v; }
-function pvBDSCUpdLoai(id,v){ const it=PV.data.selected.find(x=>x.id===id); if(it) it.loaiVatTu=v; }
 
 function pvBDSCFmtDT(v) {
   if (!v) return '';
@@ -7509,480 +7480,309 @@ function toast(msg,type=''){const t=document.getElementById('toast');t.textConte
 document.addEventListener('keydown',e=>{if(e.key==='Escape')['ov-part','ov-view','ov-parts-detail'].forEach(id=>closeOv(id));if(e.key==='Enter'&&e.target.id==='lu')login();});
 
 /* ═══════════════════════════════════════════════════════════
- * V17 hotfix - multi machine visible, fixed-item checkbox, complete workflow lists
- * Placed after the main script so it overrides older V16 hooks.
+ * V25 - Clean rewrite: stable layout + multi-machine + complete workflow + loại vật tư
+ * Replaces all V15-V24 hotfixes with one coherent implementation.
  * ═══════════════════════════════════════════════════════════ */
+
+/* ──────────────────────────────────────────────────────────
+ * MULTI-MACHINE SECTION (replaces pv16 machine card code)
+ * ──────────────────────────────────────────────────────────*/
 (function(){
-  const st=document.createElement('style');
-  st.textContent=`
-    .pv17-machine-card{border:1px solid var(--bd);border-radius:12px;background:#fff;padding:10px;margin:8px 0;box-shadow:0 1px 3px rgba(0,0,0,.03)}
-    .pv17-machine-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;font-size:12px;font-weight:800;color:var(--g)}
-    .pv17-grid{display:grid;grid-template-columns:1.15fr .8fr .8fr;gap:10px}.pv17-grid .full{grid-column:1/-1}
-    .pv17-table{width:100%;border-collapse:collapse;background:#fff;font-size:12px}.pv17-table th,.pv17-table td{border:1px solid var(--bd);padding:7px;vertical-align:middle}.pv17-table th{background:#e8f7f0;color:#083d24;font-weight:800}.pv17-table input,.pv17-table select{width:100%;border:1px solid var(--bd);border-radius:6px;padding:5px;font-size:12px}.pv17-small{font-size:11px;color:var(--mu)}
-    .pv17-actions{display:flex;gap:6px;flex-wrap:wrap;align-items:center}.pv17-dim{opacity:.55;background:#f8fafc!important}.pv17-scroll{overflow:auto}
-    @media(max-width:800px){.pv17-grid{grid-template-columns:1fr}.pv17-table{min-width:900px}}
-  `;
-  document.head.appendChild(st);
+  /* Utility */
+  function uniq(arr){const s={},o=[];(arr||[]).forEach(v=>{v=String(v||'').trim();if(!v)return;const k=v.toLowerCase();if(!s[k]){s[k]=1;o.push(v);}});return o;}
+  function emptyMachine(){return {maMay:'',loaiHinh:'',donVi:'',tenTrai:'',khuVuc:'',tinhTP:''};}
+  function mayObjToMachine(m){return {maMay:pvMayCode(m),loaiHinh:pvGetObj(m,['Loại Hình','Loại hình'])||'',donVi:pvDonVi(m),tenTrai:pvTenTrai(m),khuVuc:pvKhuVuc(m),tinhTP:pvTinhTP(m)};}
+  function ensureMachines(){if(!Array.isArray(PV.machines)||!PV.machines.length)PV.machines=[emptyMachine()];}
+
+  function machineCardHTML(m,i){
+    return `<div style="border:1px solid var(--bd);border-radius:12px;background:#fff;padding:10px;margin:8px 0;box-shadow:0 1px 3px rgba(0,0,0,.03)">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:12px;font-weight:800;color:var(--g)">
+        <span>Mã máy ${i+1}</span>
+        ${i>0?`<button type="button" class="btn bg-r sm" onclick="v25RemoveMachine(${i})">Xóa</button>`:''}
+      </div>
+      <div style="display:grid;grid-template-columns:1.2fr .8fr .8fr;gap:10px">
+        <div class="iw" style="grid-column:1/-1"><div class="il">Mã máy *</div>
+          <div style="position:relative">
+            <input class="inp" id="v25_mm_${i}" value="${pvEsc(m.maMay||'')}" placeholder="Gõ mã máy hoặc tên trang trại..." autocomplete="off"
+              oninput="v25OnMayInput(${i},this.value)" onfocus="v25ShowMaySug(${i},this.value)" onblur="v25MayBlur(${i})">
+            <div id="v25_sug_${i}" style="display:none;position:absolute;top:100%;left:0;min-width:320px;width:max-content;max-width:720px;background:#fff;border:1.5px solid var(--g);border-top:none;border-radius:0 0 8px 8px;max-height:280px;overflow-y:auto;z-index:450;box-shadow:0 8px 28px rgba(0,0,0,.18)"></div>
+          </div>
+          <div class="ih">Tìm theo mã, tên trại, đơn vị, tỉnh/thành phố</div>
+        </div>
+        <div class="iw"><div class="il">Loại hình</div><input class="inp" readonly id="v25_lh_${i}" value="${pvEsc(m.loaiHinh||'')}" placeholder="Tự động..."></div>
+        <div class="iw"><div class="il">Đơn vị hợp tác</div><input class="inp" readonly id="v25_dv_${i}" value="${pvEsc(m.donVi||'')}" placeholder="Tự động..."></div>
+        <div class="iw" style="grid-column:1/-1"><div class="il">Tên trang trại</div><input class="inp" readonly id="v25_tt_${i}" value="${pvEsc(m.tenTrai||'')}" placeholder="Tự động..."></div>
+        <div class="iw"><div class="il">Khu vực</div><input class="inp" readonly id="v25_kv_${i}" value="${pvEsc(m.khuVuc||'')}" placeholder="Tự động..."></div>
+        <div class="iw"><div class="il">Tỉnh / Thành phố</div><input class="inp" readonly id="v25_tp_${i}" value="${pvEsc(m.tinhTP||'')}" placeholder="Tự động..."></div>
+      </div>
+    </div>`;
+  }
+
+  window.v25RenderMachineSection = function(){
+    ensureMachines();
+    const sec=document.getElementById('pvb_machine_v16'); if(!sec)return;
+    sec.innerHTML = PV.machines.map((m,i)=>machineCardHTML(m,i)).join('') +
+      `<div style="margin-top:8px"><button type="button" class="btn bg-a sm" onclick="v25AddMachine()">➕ Thêm mã máy</button></div>`;
+  };
+
+  window.v25AddMachine = function(){ensureMachines();PV.machines.push(emptyMachine());v25RenderMachineSection();};
+  window.v25RemoveMachine = function(i){ensureMachines();PV.machines.splice(i,1);if(!PV.machines.length)PV.machines=[emptyMachine()];v25RenderMachineSection();};
+
+  function getMaySug(q){const list=(PV.data.may||[]).filter(pvMayCode);if(!q)return list.slice(0,20);const nq=pvNorm(q);return list.filter(m=>pvNorm(Object.values(m).join(' ')).includes(nq)).slice(0,30);}
+
+  window.v25ShowMaySug = function(i,q){
+    clearTimeout(window['_v25b'+i]);
+    const box=document.getElementById('v25_sug_'+i); if(!box)return;
+    const items=getMaySug(q);
+    if(!items.length){box.innerHTML='<div class="sug-empty">Không tìm thấy máy phù hợp</div>';box.style.display='block';return;}
+    box.innerHTML=items.map(m=>{const ma=pvMayCode(m);const sub=[pvTenTrai(m),pvDonVi(m),pvTinhTP(m)].filter(Boolean).join(' · ');
+      return `<div class="sug-item" onmousedown="v25SelectMay(${i},'${pvJs(ma)}')" style="cursor:pointer;padding:10px 16px;white-space:nowrap"><span class="sm" style="font-size:13px">${pvEsc(ma)}</span><span class="ss" style="font-size:11px">${pvEsc(sub)}</span></div>`;
+    }).join('');
+    box.style.display='block';
+  };
+
+  window.v25OnMayInput = function(i,v){
+    v25ShowMaySug(i,v);
+    if(!String(v||'').trim()){ensureMachines();PV.machines[i]=emptyMachine();v25FillFields(i);}
+  };
+
+  window.v25MayBlur = function(i){
+    window['_v25b'+i]=setTimeout(()=>{
+      const box=document.getElementById('v25_sug_'+i); if(box)box.style.display='none';
+      const v=(document.getElementById('v25_mm_'+i)||{value:''}).value.trim(); if(!v)return;
+      const m=(PV.data.may||[]).find(x=>pvNorm(pvMayCode(x))===pvNorm(v));
+      if(m){ensureMachines();PV.machines[i]=mayObjToMachine(m);v25FillFields(i);}
+    },200);
+  };
+
+  window.v25SelectMay = function(i,code){
+    clearTimeout(window['_v25b'+i]);
+    const m=(PV.data.may||[]).find(x=>pvMayCode(x)===code);
+    if(m){ensureMachines();PV.machines[i]=mayObjToMachine(m);v25FillFields(i);}
+    const box=document.getElementById('v25_sug_'+i); if(box)box.style.display='none';
+  };
+
+  window.v25FillFields = function(i){
+    const m=PV.machines[i]||emptyMachine();
+    const set=(id,v)=>{const e=document.getElementById(id+'_'+i);if(e)e.value=v||'';};
+    set('v25_mm',m.maMay);set('v25_lh',m.loaiHinh);set('v25_dv',m.donVi);
+    set('v25_tt',m.tenTrai);set('v25_kv',m.khuVuc);set('v25_tp',m.tinhTP);
+  };
+
+  window.v25MachineSummary = function(){
+    ensureMachines();
+    const list=(PV.machines||[]).filter(m=>m&&m.maMay);
+    return {
+      list, maMay:list[0]?.maMay||'', tenTrai:list[0]?.tenTrai||'',
+      donVi:list[0]?.donVi||'', khuVuc:list[0]?.khuVuc||'', tinhTP:list[0]?.tinhTP||'',
+      danhSachMaMay:uniq(list.map(m=>m.maMay)).join('; '),
+      danhSachTenTrai:uniq(list.map(m=>m.tenTrai)).join('; ')
+    };
+  };
+
+  /* Override pvBDSCRenderForm to inject v25 machine section */
+  const _oldRF = typeof pvBDSCRenderForm==='function'?pvBDSCRenderForm:null;
+  window.pvBDSCRenderForm = function(){
+    if(_oldRF) _oldRF();
+    const secs=document.querySelectorAll('#pvb_formWrap .fsec');
+    const sec=secs&&secs[1];
+    if(sec){
+      sec.innerHTML=`<div class="fsh"><div class="fsn">2</div><div class="fst">Mã hệ thống đảm nhiệm</div></div><div id="pvb_machine_v16"></div>`;
+      ensureMachines(); v25RenderMachineSection();
+    }
+  };
+
+  /* Override pvBDSCAddFixed to include loaiDong field */
+  const _oldAF = typeof pvBDSCAddFixed==='function'?pvBDSCAddFixed:null;
+  window.pvBDSCAddFixed = function(){
+    (PV.data.vatTuCoDinh||[]).filter(pvTenVatTu).forEach(x=>{
+      const id=pvMatId(x);
+      if(!PV.data.selected.find(i=>i.id===id))
+        PV.data.selected.push({id,tenVatTu:pvTenVatTu(x),cumLinhKien:pvCum(x),
+          maVatTu:pvGetObj(x,['Mã vật tư','Ma vat tu'])||'',
+          donViTinh:pvGetObj(x,['ĐVT','Đơn vị tính','DVT'])||'',
+          soLuongCan:1,tinhTrangXuatKho:'Mới',loaiVatTu:'',
+          nguonVatTu:'Cố định',fixed:true,included:true,loaiDong:'Chuẩn bị'});
+    });
+  };
 })();
 
-function pv17Uniq(arr){const out=[],seen={};(arr||[]).forEach(x=>{const v=String(x||'').trim();if(!v)return;const k=pvNorm(v);if(!seen[k]){seen[k]=1;out.push(v);}});return out;}
-function pv17EmptyMachine(){return {maMay:'',loaiHinh:'',donVi:'',tenTrai:'',khuVuc:'',tinhTP:''};}
-function pv17MayObjToMachine(m){return {maMay:pvMayCode(m),loaiHinh:pvGetObj(m,['Loại Hình','Loại hình','Loai Hinh'])||'',donVi:pvDonVi(m),tenTrai:pvTenTrai(m),khuVuc:pvKhuVuc(m),tinhTP:pvTinhTP(m)};}
-function pv17EnsureMachinesFromLegacy(){
-  if(!Array.isArray(PV.machines)||!PV.machines.length){
-    const ma=(document.getElementById('pvb_maMay')||{}).value||'';
-    const m=ma?(PV.data.may||[]).find(x=>pvNorm(pvMayCode(x))===pvNorm(ma)):null;
-    PV.machines=[m?pv17MayObjToMachine(m):pv17EmptyMachine()];
-  }
-  if(!PV.machines.length)PV.machines=[pv17EmptyMachine()];
-}
-function pv17MachineSummary(){
-  pv17EnsureMachinesFromLegacy();
-  const list=(PV.machines||[]).filter(m=>m&&m.maMay);
-  return {
-    list:list,
-    maMay:list[0]?.maMay||'',tenTrai:list[0]?.tenTrai||'',donVi:list[0]?.donVi||'',khuVuc:list[0]?.khuVuc||'',tinhTP:list[0]?.tinhTP||'',
-    danhSachMaMay:pv17Uniq(list.map(m=>m.maMay)).join('; '),
-    danhSachTenTrai:pv17Uniq(list.map(m=>m.tenTrai)).join('; ')
-  };
-}
-function pv17GetMaySug(q){const list=(PV.data.may||[]).filter(pvMayCode);if(!q)return list.slice(0,20);const nq=pvNorm(q);return list.filter(m=>pvNorm([pvMayCode(m),pvTenTrai(m),pvDonVi(m),pvKhuVuc(m),pvTinhTP(m),Object.values(m).join(' ')].join(' ')).includes(nq)).slice(0,30);}
-function pv17ShowMaySug(i,q){
-  clearTimeout(window['_pv17Blur_'+i]);
-  const box=document.getElementById('pv17_may_sug_'+i);if(!box)return;
-  const items=pv17GetMaySug(q);
-  if(!items.length){box.innerHTML='<div class="sug-empty">Không tìm thấy máy phù hợp</div>';box.style.display='block';return;}
-  box.innerHTML=items.map(m=>{const ma=pvMayCode(m);const sub=[pvTenTrai(m),pvDonVi(m),pvTinhTP(m)].filter(Boolean).join(' · ');return `<div class="sug-item" onmousedown="pv17SelectMay(${i},'${pvJs(ma)}')" style="cursor:pointer;padding:10px 16px;white-space:nowrap"><span class="sm" style="font-size:13px">${pvEsc(ma)}</span><span class="ss" style="font-size:11px">${pvEsc(sub)}</span></div>`}).join('');
-  box.style.display='block';
-}
-function pv17MachineCardHTML(m,i){return `<div class="pv17-machine-card" data-idx="${i}">
-  <div class="pv17-machine-head"><span>Mã máy ${i+1}</span>${i>0?`<button type="button" class="btn bg-r sm" onclick="pv17RemoveMachine(${i})">Xóa</button>`:''}</div>
-  <div class="pv17-grid">
-    <div class="iw"><div class="il">Mã máy *</div><div style="position:relative"><input class="inp" id="pv17_mamay_${i}" value="${pvEsc(m.maMay||'')}" placeholder="Gõ mã máy hoặc tên trang trại..." autocomplete="off" oninput="pv17OnMayInput(${i},this.value)" onfocus="pv17ShowMaySug(${i},this.value)" onblur="pv17MayBlur(${i})"><div id="pv17_may_sug_${i}" style="display:none;position:absolute;top:100%;left:0;min-width:320px;width:max-content;max-width:720px;background:#fff;border:1.5px solid var(--g);border-top:none;border-radius:0 0 8px 8px;max-height:340px;overflow-y:auto;z-index:450;box-shadow:0 8px 28px rgba(0,0,0,.18)"></div></div><div class="ih">Tìm theo mã, tên trại, đơn vị, tỉnh/thành phố</div></div>
-    <div class="iw"><div class="il">Loại hình</div><input class="inp" readonly id="pv17_lh_${i}" value="${pvEsc(m.loaiHinh||'')}" placeholder="Tự động..."></div>
-    <div class="iw"><div class="il">Đơn vị hợp tác</div><input class="inp" readonly id="pv17_dv_${i}" value="${pvEsc(m.donVi||'')}" placeholder="Tự động..."></div>
-    <div class="iw full"><div class="il">Tên trang trại</div><input class="inp" readonly id="pv17_tenTrai_${i}" value="${pvEsc(m.tenTrai||'')}" placeholder="Tự động..."></div>
-    <div class="iw"><div class="il">Khu vực</div><input class="inp" readonly id="pv17_khuVuc_${i}" value="${pvEsc(m.khuVuc||'')}" placeholder="Tự động..."></div>
-    <div class="iw"><div class="il">Tỉnh / Thành phố</div><input class="inp" readonly id="pv17_tinhTP_${i}" value="${pvEsc(m.tinhTP||'')}" placeholder="Tự động..."></div>
-  </div>
-</div>`;}
-function pv17RenderMachineSection(){
-  pv17EnsureMachinesFromLegacy();
-  const sec=document.getElementById('pv17_machine_section');if(!sec)return;
-  sec.innerHTML=(PV.machines||[]).map((m,i)=>pv17MachineCardHTML(m,i)).join('')+`<div style="margin-top:8px"><button type="button" class="btn bg-a sm" onclick="pv17AddMachine()">➕ Thêm mã máy</button></div>`;
-  pv17SyncLegacyMachineFields();
-}
-function pv17AddMachine(){pv17EnsureMachinesFromLegacy();PV.machines.push(pv17EmptyMachine());pv17RenderMachineSection();}
-function pv17RemoveMachine(i){pv17EnsureMachinesFromLegacy();PV.machines.splice(i,1);if(!PV.machines.length)PV.machines=[pv17EmptyMachine()];pv17RenderMachineSection();}
-function pv17OnMayInput(i,v){pv17ShowMaySug(i,v);if(!String(v||'').trim()){PV.machines[i]=pv17EmptyMachine();pv17FillMachineFields(i);pv17SyncLegacyMachineFields();}}
-function pv17MayBlur(i){window['_pv17Blur_'+i]=setTimeout(()=>{const box=document.getElementById('pv17_may_sug_'+i);if(box)box.style.display='none';const v=(document.getElementById('pv17_mamay_'+i)||{}).value||'';if(!String(v).trim())return;const m=(PV.data.may||[]).find(x=>pvNorm(pvMayCode(x))===pvNorm(v));if(m)pv17SetMachine(i,pv17MayObjToMachine(m));},200);}
-function pv17SelectMay(i,code){clearTimeout(window['_pv17Blur_'+i]);const m=(PV.data.may||[]).find(x=>pvMayCode(x)===code);if(m)pv17SetMachine(i,pv17MayObjToMachine(m));const box=document.getElementById('pv17_may_sug_'+i);if(box)box.style.display='none';}
-function pv17SetMachine(i,m){pv17EnsureMachinesFromLegacy();PV.machines[i]=m;pv17FillMachineFields(i);pv17SyncLegacyMachineFields();}
-function pv17FillMachineFields(i){const m=PV.machines[i]||pv17EmptyMachine();[['pv17_mamay',m.maMay],['pv17_lh',m.loaiHinh],['pv17_dv',m.donVi],['pv17_tenTrai',m.tenTrai],['pv17_khuVuc',m.khuVuc],['pv17_tinhTP',m.tinhTP]].forEach(([id,v])=>{const e=document.getElementById(id+'_'+i);if(e)e.value=v||'';});}
-function pv17SyncLegacyMachineFields(){const ms=pv17MachineSummary();[['pvb_maMay',ms.maMay],['pvb_lh',ms.list[0]?.loaiHinh||''],['pvb_dv',ms.donVi],['pvb_tenTrai',ms.tenTrai],['pvb_khuVuc',ms.khuVuc],['pvb_tinhTP',ms.tinhTP]].forEach(([id,v])=>{const e=document.getElementById(id);if(e)e.value=v||'';});}
-function pv17ReplaceMachineSection(){
-  const wrap=document.getElementById('pvb_formWrap');if(!wrap)return;
-  const secs=wrap.querySelectorAll('.fsec');const oldSec=secs&&secs[1];if(!oldSec)return;
-  oldSec.innerHTML=`<div class="fsh"><div class="fsn">2</div><div class="fst">Mã hệ thống đảm nhiệm</div></div><div id="pv17_machine_section"></div>`;
-  pv17EnsureMachinesFromLegacy();pv17RenderMachineSection();
-}
-
-const pv17BaseRenderForm = typeof pvBDSCRenderForm==='function' ? pvBDSCRenderForm : null;
-pvBDSCRenderForm=function(){if(pv17BaseRenderForm)pv17BaseRenderForm();pv17ReplaceMachineSection();pvBDSCRenderSelected();};
-
-pvBDSCAddFixed=function(){
-  (PV.data.vatTuCoDinh||[]).filter(pvTenVatTu).forEach(x=>{const id=pvMatId(x);if(!PV.data.selected.find(i=>i.id===id))PV.data.selected.push({id,tenVatTu:pvTenVatTu(x),cumLinhKien:pvCum(x),maVatTu:pvGetObj(x,['Mã vật tư','Ma vat tu'])||'',donViTinh:pvGetObj(x,['ĐVT','Đơn vị tính','DVT'])||'',soLuongCan:1,tinhTrangXuatKho:'Mới',nguonVatTu:'Cố định',fixed:true,included:true,loaiDong:'Chuẩn bị'});});
-};
-function pv17ToggleInclude(id,checked){const it=(PV.data.selected||[]).find(x=>x.id===id);if(!it)return;if(it.fixed){it.included=checked;}else if(!checked){PV.data.selected=(PV.data.selected||[]).filter(x=>x.id!==id);}else{it.included=true;}pvBDSCRenderVatTuSearch();pvBDSCRenderSelected();}
-pvBDSCRenderSelected=function(){
-  const box=document.getElementById('pvb_selectedItems');if(!box)return;
-  if(!PV.data.selected.length){box.innerHTML='<i style="font-size:12px;color:var(--mu)">Chưa chọn vật tư.</i>';return;}
-  box.innerHTML=PV.data.selected.map(x=>{const checked=x.included!==false;return `<div class="${checked?'':'pv17-dim'}" style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--bd);border-radius:8px;margin-bottom:5px;background:#fff;flex-wrap:wrap"><input type="checkbox" ${checked?'checked':''} onchange="pv17ToggleInclude('${pvJs(x.id)}',this.checked)" title="Tích để đưa vào phiếu" style="width:16px;height:16px;accent-color:var(--g);cursor:pointer"><div style="flex:1;min-width:120px;font-size:12px"><b>${pvEsc(x.tenVatTu)}</b><br><span style="color:var(--mu)">${pvEsc(x.cumLinhKien)} · ${pvEsc(x.nguonVatTu)}</span></div><input type="number" min="0" value="${pvEsc(String(x.soLuongCan||''))}" style="width:60px;border:1.5px solid var(--bd);border-radius:6px;padding:3px 6px;font-size:11px;text-align:center" onchange="pvBDSCUpdQty('${pvJs(x.id)}',this.value)"><select style="border:1.5px solid var(--bd);border-radius:6px;padding:3px 5px;font-size:11px" onchange="pvBDSCUpdSt('${pvJs(x.id)}',this.value)">${['Mới','Cũ','Tốt','K.xđ'].map(s=>`<option ${s===x.tinhTrangXuatKho?'selected':''}>${s}</option>`).join('')}</select><span style="font-size:10px;color:var(--mu)">${x.fixed?'Cố định':'Chọn thêm'}</span>${x.fixed?'':`<button class="btn bg-r sm" onclick="pvBDSCRemoveMat('${pvJs(x.id)}')">Bỏ</button>`}</div>`;}).join('');
-};
-pvBDSCRemoveMat=function(id){PV.data.selected=(PV.data.selected||[]).filter(x=>x.id!==id);pvBDSCRenderVatTuSearch();pvBDSCRenderSelected();};
-
-pvBDSCPayload=function(){
-  const md=(document.querySelector('input[name="pvb_mucDich"]:checked')||{}).value||'Bảo dưỡng sửa chữa';
-  const ms=pv17MachineSummary();
-  const items=(PV.data.selected||[]).filter(x=>x.included!==false).map((x,i)=>({stt:i+1,nguonVatTu:x.nguonVatTu,cumLinhKien:x.cumLinhKien,tenVatTu:x.tenVatTu,maVatTu:x.maVatTu,donViTinh:x.donViTinh,soLuongCan:x.soLuongCan,tinhTrangXuatKho:x.tinhTrangXuatKho,loaiDong:x.loaiDong||'Chuẩn bị',included:true}));
-  return {doiTruong:pvBDSCGetVal('pvb_doiTruong'),thanhVien:_pvbTVSelected.slice(),maMay:ms.maMay,tenTrai:ms.tenTrai,donVi:ms.donVi,khuVuc:ms.khuVuc,tinhTP:ms.tinhTP,machines:ms.list,danhSachMaMay:ms.danhSachMaMay,danhSachTenTrai:ms.danhSachTenTrai,ngayGioXuatKho:pvBDSCFmtDT(pvBDSCGetVal('pvb_ngayGioXuatKho')),nguoiXuatKho:pvBDSCGetVal('pvb_nguoiXuatKho'),ngayGioNhapKho:pvBDSCFmtDT(pvBDSCGetVal('pvb_ngayGioNhapKho')),nguoiNhapKho:pvBDSCGetVal('pvb_nguoiNhapKho'),mucDich:md,cuThe:md==='Bảo dưỡng sửa chữa'?(PV.hienTuongSel.join('; ')||'-'):(pvBDSCGetVal('pvb_cuTheNhapTay')||'-'),ghiChu:'',items};
-};
-pvBDSCValidate=function(p){if(!p.doiTruong)return'Vui lòng chọn đội trưởng.';if(!p.maMay)return'Vui lòng chọn ít nhất 1 mã máy.';if(!p.ngayGioXuatKho)return'Vui lòng nhập ngày giờ xuất kho.';if(!p.nguoiXuatKho)return'Vui lòng chọn người xuất kho.';if(!p.items.length)return'Vui lòng tích chọn ít nhất 1 vật tư.';return'';};
-
-function pv17IsCompleted(r){return pvNorm(r.trangThai||'').includes('hoan thanh');}
-function pv17ListRowsHTML(rows,mode){
-  if(!rows.length)return `<div class="cb"><i>${mode==='done'?'Chưa có phiếu đã hoàn thành.':'Không có phiếu xuất cần hoàn thành.'}</i></div>`;
-  return `<div class="tblwrap"><table class="tbl"><thead><tr><th>Mã phiếu</th><th>Ngày tạo</th><th>Mã máy</th><th>Tên trại</th><th>Đội trưởng</th><th>Mục đích</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>${rows.map(r=>`<tr><td><b>${pvEsc(r.maPhieu)}</b></td><td>${pvEsc(r.ngayTao)}</td><td>${pvEsc(r.danhSachMaMay||r.maMay)}</td><td>${pvEsc(r.danhSachTenTrai||r.tenTrai)}</td><td>${pvEsc(r.doiTruong)}</td><td>${pvEsc(r.mucDich)}</td><td><span class="b ${pv17IsCompleted(r)?'bg':'ba'}">${pvEsc(r.trangThai||'Đã tạo')}</span></td><td><div class="pv17-actions"><button class="btn bg-a sm" onclick="pvBDSCPreviewSaved('${pvJs(r.maPhieu)}')">👁 Xem</button>${mode==='wait'?`<button class="btn bg-g sm" onclick="pv17OpenComplete('${pvJs(r.maPhieu)}')">🔄 Cập nhật</button>`:`<button class="btn bg-g sm" onclick="pvBDSCExportPdf('${pvJs(r.maPhieu)}')">PDF</button><button class="btn bg-p sm" onclick="pvBDSCExportWord('${pvJs(r.maPhieu)}')">Word</button>`}</div></td></tr>`).join('')}</tbody></table></div>`;
-}
-function pv17RenderCompletePage(){
-  const root=document.getElementById('pvCompleteRoot');if(!root)return;
-  document.querySelectorAll('.nitem').forEach(x=>x.classList.remove('on'));document.getElementById('ni-hoanThanhPhieu')?.classList.add('on');
-  const list=(_pvBDSCListCache&&_pvBDSCListCache.length?_pvBDSCListCache:pvBDSCReadListCache_())||[];
-  const wait=list.filter(r=>!pv17IsCompleted(r));const done=list.filter(r=>pv17IsCompleted(r));
-  root.innerHTML=`<div class="card"><div class="cb" style="display:flex;justify-content:space-between;gap:8px;align-items:center"><b>Danh sách phiếu xuất vật tư chờ cập nhật (${wait.length})</b><button class="btn bg-g sm" onclick="pvBDSCRefreshHistory_(true).then(()=>pv17RenderCompletePage())">↻ Làm mới</button></div>${pv17ListRowsHTML(wait,'wait')}</div><div class="card" style="margin-top:14px"><div class="cb"><b>Danh sách phiếu đã hoàn thành (${done.length})</b></div>${pv17ListRowsHTML(done,'done')}</div>`;
-}
-async function pv17OpenComplete(id){const root=document.getElementById('pvCompleteRoot');if(!root)return;root.innerHTML='<div class="card">Đang mở phiếu...</div>';try{const d=await pvApi('getPhieuDetail',{maPhieu:id});pv17RenderCompleteForm(root,d.phieu,d.items||[]);}catch(e){root.innerHTML='<div class="card pv-error">'+pvEsc(e.message)+'</div>';}}
-pv16OpenComplete=pv17OpenComplete;
-function pv17RenderCompleteForm(root,phieu,items){
-  const dt=new Date();dt.setMinutes(dt.getMinutes()-dt.getTimezoneOffset());
-  root.innerHTML=`<div class="card"><div class="cb" style="display:flex;justify-content:space-between;gap:8px"><div><b>Cập nhật hoàn thành phiếu: ${pvEsc(phieu.maPhieu)}</b><div class="pv17-small">${pvEsc(phieu.danhSachMaMay||phieu.maMay)} · ${pvEsc(phieu.danhSachTenTrai||phieu.tenTrai)}</div></div><button class="btn sm" onclick="pv17RenderCompletePage()">← Quay lại</button></div><div class="fgrid fg2"><div class="iw"><div class="il">Ngày giờ nhập kho *</div><input class="inp" type="datetime-local" id="pv17_ngayNhap" value="${dt.toISOString().slice(0,16)}"></div><div class="iw"><div class="il">Người nhập kho *</div><input class="inp" id="pv17_nguoiNhap" value="${pvEsc(phieu.nguoiNhapKho||'')}" placeholder="Gõ tên người nhập kho..."></div></div><div class="pv17-scroll" style="margin-top:12px"><table class="pv17-table" id="pv17_complete_table"><thead><tr><th style="width:42px">STT</th><th>Hạng mục vật tư</th><th style="width:90px">SL xuất kho</th><th style="width:90px">SL sử dụng</th><th style="width:90px">SL nhập kho</th><th style="width:120px">Tình trạng nhập</th><th style="width:160px">Ghi chú</th><th style="width:90px">Loại dòng</th></tr></thead><tbody>${(items||[]).map((x,i)=>pv17CompleteRowHTML(x,i)).join('')}</tbody></table></div><div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn bg-a sm" onclick="pv17AddCompleteRow()">➕ Thêm vật tư phát sinh</button><button class="btn bg-g" onclick="pv17SubmitComplete('${pvJs(phieu.maPhieu)}')">✅ Lưu hoàn thiện</button></div><div class="ih" style="margin-top:8px">Khi lưu hoàn thiện, hệ thống xóa link/file PDF - Word xuất kho cũ. Lần bấm PDF/Word sau sẽ tạo bản hoàn thành mới.</div></div>`;
-}
-function pv17CompleteRowHTML(x,i){const sx=x.soLuongXuatKho||x.soLuongCan||'';return `<tr><td style="text-align:center">${i+1}</td><td><input value="${pvEsc(x.tenVatTu||'')}" data-k="tenVatTu"><input type="hidden" data-k="nguonVatTu" value="${pvEsc(x.nguonVatTu||'')}"><input type="hidden" data-k="cumLinhKien" value="${pvEsc(x.cumLinhKien||'')}"><input type="hidden" data-k="maVatTu" value="${pvEsc(x.maVatTu||'')}"><input type="hidden" data-k="donViTinh" value="${pvEsc(x.donViTinh||'')}"></td><td><input type="number" min="0" value="${pvEsc(String(sx))}" data-k="soLuongXuatKho"></td><td><input type="number" min="0" value="${pvEsc(String(x.soLuongSuDung||''))}" data-k="soLuongSuDung"></td><td><input type="number" min="0" value="${pvEsc(String(x.soLuongNhapKho||''))}" data-k="soLuongNhapKho"></td><td><select data-k="tinhTrangNhapKho">${['','Mới','Cũ','Tốt','Hỏng'].map(s=>`<option ${s===(x.tinhTrangNhapKho||'')?'selected':''}>${s}</option>`).join('')}</select></td><td><input value="${pvEsc(x.ghiChu||'')}" data-k="ghiChu"></td><td><select data-k="loaiDong"><option ${String(x.loaiDong||'Chuẩn bị')==='Chuẩn bị'?'selected':''}>Chuẩn bị</option><option ${String(x.loaiDong||'')==='Phát sinh'?'selected':''}>Phát sinh</option></select></td></tr>`;}
-function pv17AddCompleteRow(){const tb=document.querySelector('#pv17_complete_table tbody');if(!tb)return;tb.insertAdjacentHTML('beforeend',pv17CompleteRowHTML({loaiDong:'Phát sinh'},tb.children.length));}
-function pv17CollectCompleteItems(){return Array.from(document.querySelectorAll('#pv17_complete_table tbody tr')).map((tr,i)=>{const obj={stt:i+1};tr.querySelectorAll('[data-k]').forEach(el=>obj[el.dataset.k]=el.value);obj.soLuongCan=obj.soLuongXuatKho;return obj;}).filter(x=>String(x.tenVatTu||'').trim());}
-async function pv17SubmitComplete(maPhieu){const ngay=pvBDSCFmtDT(document.getElementById('pv17_ngayNhap')?.value||'');const nguoi=(document.getElementById('pv17_nguoiNhap')?.value||'').trim();if(!ngay)return toast('Thiếu ngày giờ nhập kho','err');if(!nguoi)return toast('Thiếu người nhập kho','err');const items=pv17CollectCompleteItems();if(!items.length)return toast('Chưa có vật tư','err');try{await pvApi('completePhieu',{maPhieu,payload:{ngayGioNhapKho:ngay,nguoiNhapKho:nguoi,items}});toast('✅ Đã lưu hoàn thiện. Link/file PDF-Word cũ đã được xóa để tạo bản hoàn thành mới.','ok');await pvBDSCRefreshHistory_(true);pv17RenderCompletePage();}catch(e){toast('❌ '+e.message,'err');}}
-pv16RenderCompletePage=pv17RenderCompletePage;
-pv16SubmitComplete=pv17SubmitComplete;
-
-const pv17BaseNav=typeof nav==='function'?nav:null;
-nav=function(p){
-  if(p==='hoanThanhPhieu'){
-    if(window.innerWidth<=768&&typeof closeSidebar==='function')closeSidebar();
-    document.querySelectorAll('.page').forEach(x=>x.classList.remove('on'));document.querySelectorAll('.nitem').forEach(x=>x.classList.remove('on'));
-    document.getElementById('pg-hoanThanhPhieu')?.classList.add('on');document.getElementById('ni-hoanThanhPhieu')?.classList.add('on');
-    curPage=p;if(typeof pvBDSCStartPolling_==='function')pvBDSCStartPolling_();pv17RenderCompletePage();return;
-  }
-  if(pv17BaseNav)return pv17BaseNav(p);
-};
-</script>
-</div></div></div>
-<!-- V18 hotfix: căn lại giao diện Hoàn thành phiếu vật tư về full width, không lệch phải -->
-<style id="pv18-complete-layout-fix">
-  #pg-hoanThanhPhieu{
-    max-width:none !important;
-    width:100% !important;
-    margin:0 !important;
-    padding:16px 20px !important;
-    box-sizing:border-box !important;
-  }
-  #pg-hoanThanhPhieu .ph{
-    margin-left:0 !important;
-    text-align:left !important;
-  }
-  #pvCompleteRoot{
-    width:100% !important;
-    max-width:none !important;
-    margin:0 !important;
-    box-sizing:border-box !important;
-  }
-  #pvCompleteRoot .card{
-    width:100% !important;
-    max-width:none !important;
-    margin-left:0 !important;
-    margin-right:0 !important;
-    box-sizing:border-box !important;
-  }
-  #pvCompleteRoot .tblwrap,
-  #pvCompleteRoot .pv17-scroll,
-  #pvCompleteRoot .pv18-scroll{
-    width:100% !important;
-    max-width:100% !important;
-    overflow-x:auto !important;
-    box-sizing:border-box !important;
-  }
-  #pvCompleteRoot .tbl{
-    width:100% !important;
-  }
-  #pvCompleteRoot .pv17-actions,
-  #pvCompleteRoot .pv18-actions{
-    display:flex;
-    gap:6px;
-    flex-wrap:wrap;
-    align-items:center;
-    justify-content:flex-start;
-  }
-  #pv18_complete_table{
-    width:100%;
-    min-width:1120px;
-    border-collapse:collapse;
-    table-layout:fixed;
-    background:#fff;
-    font-size:12px;
-  }
-  #pv18_complete_table th,
-  #pv18_complete_table td{
-    border-bottom:1px solid #e2e8f0;
-    padding:7px 8px;
-    vertical-align:middle;
-  }
-  #pv18_complete_table th{
-    background:#e8f7f0;
-    color:#083d24;
-    font-weight:800;
-    font-size:11px;
-    text-transform:uppercase;
-  }
-  #pv18_complete_table input,
-  #pv18_complete_table select{
-    width:100%;
-    min-width:0;
-    border:1.5px solid var(--bd);
-    border-radius:8px;
-    padding:7px 8px;
-    font-size:12px;
-    font-family:var(--font);
-    box-sizing:border-box;
-    outline:none;
-    background:#fff;
-  }
-  #pv18_complete_table input:focus,
-  #pv18_complete_table select:focus{
-    border-color:var(--g);
-    box-shadow:0 0 0 3px rgba(13,110,63,.10);
-  }
-  .pv18-form-head{
-    display:flex;
-    justify-content:space-between;
-    gap:12px;
-    align-items:flex-start;
-    flex-wrap:wrap;
-  }
-  .pv18-form-grid{
-    display:grid;
-    grid-template-columns:1fr 1fr;
-    gap:12px;
-    margin-top:10px;
-  }
-  .pv18-form-actions{
-    margin-top:12px;
-    display:flex;
-    gap:8px;
-    flex-wrap:wrap;
-    align-items:center;
-  }
-  @media(max-width:900px){
-    #pg-hoanThanhPhieu{padding:12px 10px !important;}
-    .pv18-form-grid{grid-template-columns:1fr;}
-    #pv18_complete_table{min-width:960px;}
-  }
-</style>
-<script id="pv18-complete-layout-fix-js">
+/* ──────────────────────────────────────────────────────────
+ * LOẠI VẬT TƯ: dropdown chọn loại (Thay thế / Sửa chữa / Bảo dưỡng)
+ * ──────────────────────────────────────────────────────────*/
+// Override pvBDSCRenderVatTuSearch to add loai dropdown
 (function(){
-  function esc(s){return (typeof pvEsc==='function')?pvEsc(s):String(s??'').replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
-  function js(s){return (typeof pvJs==='function')?pvJs(s):String(s??'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");}
-  function small(s){return `<span style="font-size:11px;color:var(--mu)">${esc(s||'')}</span>`;}
+  const LOAI_OPTS = ['Thay thế','Sửa chữa','Bảo dưỡng định kỳ'];
 
-  window.pv17ListRowsHTML = function(rows,mode){
-    if(!rows || !rows.length){
-      return `<div class="cb"><i>${mode==='done'?'Chưa có phiếu đã hoàn thành.':'Không có phiếu xuất cần hoàn thành.'}</i></div>`;
-    }
-    return `<div class="tblwrap"><table class="tbl"><thead><tr>
-      <th style="width:130px">Mã phiếu</th>
-      <th style="width:130px">Ngày tạo</th>
-      <th style="width:150px">Mã máy</th>
-      <th>Tên trại</th>
-      <th style="width:150px">Đội trưởng</th>
-      <th style="width:150px">Mục đích</th>
-      <th style="width:110px">Trạng thái</th>
-      <th style="width:160px">Thao tác</th>
-    </tr></thead><tbody>${rows.map(r=>`<tr>
-      <td><b>${esc(r.maPhieu)}</b></td>
-      <td>${esc(r.ngayTao)}</td>
-      <td>${esc(r.danhSachMaMay||r.maMay)}</td>
-      <td>${esc(r.danhSachTenTrai||r.tenTrai)}</td>
-      <td>${esc(r.doiTruong)}</td>
-      <td>${esc(r.mucDich)}</td>
-      <td><span class="b ${pv17IsCompleted(r)?'bg':'ba'}">${esc(r.trangThai||'Đã tạo')}</span></td>
-      <td><div class="pv18-actions"><button class="btn bg-a sm" onclick="pvBDSCPreviewSaved('${js(r.maPhieu)}')">👁 Xem</button>${mode==='wait'?`<button class="btn bg-g sm" onclick="pv17OpenComplete('${js(r.maPhieu)}')">🔄 Cập nhật</button>`:`<button class="btn bg-g sm" onclick="pvBDSCExportPdf('${js(r.maPhieu)}')">PDF</button><button class="btn bg-p sm" onclick="pvBDSCExportWord('${js(r.maPhieu)}')">Word</button>`}</div></td>
-    </tr>`).join('')}</tbody></table></div>`;
+  window.pvBDSCRenderVatTuSearch = function(){
+    const box=document.getElementById('pvb_vatTuSearchList'); if(!box)return;
+    const q=pvNorm((document.getElementById('pvb_searchVatTu')||{value:''}).value||'');
+    const selected=new Set((PV.data.selected||[]).map(x=>x.id));
+    const list=pvBDSCSelectable().filter(x=>!selected.has(pvMatId(x))).filter(x=>!q||pvNorm([pvTenVatTu(x),pvCum(x)].join(' ')).includes(q));
+    if(!list.length){box.innerHTML='<div class="sug-empty">Không có vật tư phù hợp.</div>';return;}
+    const groups={};
+    list.forEach(x=>{const g=pvCum(x)||'Khác';(groups[g]=groups[g]||[]).push(x);});
+    box.innerHTML=Object.keys(groups).sort().map(g=>`
+      <div>
+        <div style="padding:6px 10px;font-size:10px;font-weight:800;color:#083d24;background:#e8f7f0;text-transform:uppercase;letter-spacing:.5px;position:sticky;top:0">${pvEsc(g)}</div>
+        ${groups[g].map(x=>{const id=pvMatId(x);return `<div class="pi-row" style="display:flex;align-items:center;gap:8px;padding:7px 10px;border-bottom:1px solid #f1f5f9;flex-wrap:wrap">
+          <div style="flex:1;font-size:12px;min-width:120px"><b>${pvEsc(pvTenVatTu(x))}</b><span style="color:var(--mu);margin-left:6px;font-size:10px">${pvEsc(g)}</span></div>
+          <select id="v25_loai_${pvCss(id)}" style="border:1.5px solid #a7f3d0;border-radius:6px;padding:3px 6px;font-size:11px;background:#f0fdf4;color:#065f46;font-weight:600;flex-shrink:0">
+            ${LOAI_OPTS.map(l=>`<option value="${pvEsc(l)}">${pvEsc(l)}</option>`).join('')}
+          </select>
+          <input id="pvb_qty_${pvCss(id)}" type="number" min="0" value="1" style="width:60px;border:1.5px solid var(--bd);border-radius:6px;padding:3px 6px;font-size:11px;text-align:center;flex-shrink:0">
+          <select id="pvb_st_${pvCss(id)}" style="border:1.5px solid var(--bd);border-radius:6px;padding:3px 5px;font-size:11px;flex-shrink:0"><option>Mới</option><option>Cũ</option><option>Tốt</option><option>K.xđ</option></select>
+          <input type="checkbox" onchange="pvBDSCSelectMaterial('${pvJs(id)}',this.checked)" style="width:16px;height:16px;accent-color:var(--g);flex-shrink:0;cursor:pointer">
+        </div>`}).join('')}
+      </div>`).join('');
   };
 
-  window.pv17RenderCompletePage = function(){
-    const root=document.getElementById('pvCompleteRoot');if(!root)return;
-    const pg=document.getElementById('pg-hoanThanhPhieu');
-    if(pg){pg.style.maxWidth='none';pg.style.width='100%';pg.style.margin='0';pg.style.padding='16px 20px';}
-    document.querySelectorAll('.nitem').forEach(x=>x.classList.remove('on'));
-    document.getElementById('ni-hoanThanhPhieu')?.classList.add('on');
-    const list=(_pvBDSCListCache&&_pvBDSCListCache.length?_pvBDSCListCache:pvBDSCReadListCache_())||[];
-    const wait=list.filter(r=>!pv17IsCompleted(r));
-    const done=list.filter(r=>pv17IsCompleted(r));
-    root.innerHTML=`<div class="card"><div class="cb" style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap"><b>Danh sách phiếu xuất vật tư chờ cập nhật (${wait.length})</b><button class="btn bg-g sm" onclick="pvBDSCRefreshHistory_(true).then(()=>pv17RenderCompletePage())">↻ Làm mới</button></div>${pv17ListRowsHTML(wait,'wait')}</div><div class="card" style="margin-top:14px"><div class="cb"><b>Danh sách phiếu đã hoàn thành (${done.length})</b></div>${pv17ListRowsHTML(done,'done')}</div>`;
+  window.pvBDSCSelectMaterial = function(id, checked){
+    if(!checked)return;
+    const x=(PV.data.vatTu||[]).find(v=>pvMatId(v)===id); if(!x)return;
+    const qEl=document.getElementById('pvb_qty_'+pvCss(id));
+    const sEl=document.getElementById('pvb_st_'+pvCss(id));
+    const loaiEl=document.getElementById('v25_loai_'+pvCss(id));
+    const qty=qEl?parseFloat(qEl.value)||1:1;
+    const st=sEl?sEl.value:'Mới';
+    const loai=loaiEl?loaiEl.value:LOAI_OPTS[0];
+    if(!PV.data.selected.find(i=>i.id===id))
+      PV.data.selected.push({id,tenVatTu:pvTenVatTu(x),cumLinhKien:pvCum(x),
+        maVatTu:pvGetObj(x,['Mã vật tư','Ma vat tu'])||'',
+        donViTinh:pvGetObj(x,['ĐVT','Đơn vị tính','DVT'])||'',
+        soLuongCan:qty,tinhTrangXuatKho:st,loaiVatTu:loai,
+        nguonVatTu:'Chọn thêm',fixed:false,loaiDong:'Chuẩn bị'});
+    pvBDSCRenderVatTuSearch(); pvBDSCRenderSelected();
   };
 
-  window.pv17RenderCompleteForm = function(root,phieu,items){
-    const dt=new Date();dt.setMinutes(dt.getMinutes()-dt.getTimezoneOffset());
-    root.innerHTML=`<div class="card"><div class="cb pv18-form-head"><div><b>Cập nhật hoàn thành phiếu: ${esc(phieu.maPhieu)}</b><div class="pv17-small">${esc(phieu.danhSachMaMay||phieu.maMay)} · ${esc(phieu.danhSachTenTrai||phieu.tenTrai)}</div></div><button class="btn sm" onclick="pv17RenderCompletePage()">← Quay lại</button></div>
-    <div class="pv18-form-grid"><div class="iw"><div class="il">Ngày giờ nhập kho *</div><input class="inp" type="datetime-local" id="pv17_ngayNhap" value="${dt.toISOString().slice(0,16)}"></div><div class="iw"><div class="il">Người nhập kho *</div><input class="inp" id="pv17_nguoiNhap" value="${esc(phieu.nguoiNhapKho||'')}" placeholder="Gõ tên người nhập kho..."></div></div>
-    <div class="pv18-scroll" style="margin-top:12px"><table id="pv18_complete_table"><thead><tr>
-      <th style="width:44px">STT</th><th style="width:260px">Hạng mục vật tư</th><th style="width:110px">Loại vật tư</th><th style="width:90px">SL xuất kho</th><th style="width:90px">SL sử dụng</th><th style="width:90px">SL nhập kho</th><th style="width:130px">Tình trạng nhập</th><th style="width:150px">Ghi chú</th><th style="width:105px">Loại dòng</th>
-    </tr></thead><tbody>${(items||[]).map((x,i)=>pv17CompleteRowHTML(x,i)).join('')}</tbody></table></div>
-    <div class="pv18-form-actions"><button class="btn bg-a sm" onclick="pv17AddCompleteRow()">➕ Thêm vật tư phát sinh</button><button class="btn bg-g" onclick="pv17SubmitComplete('${js(phieu.maPhieu)}')">✅ Lưu hoàn thiện</button></div><div class="ih" style="margin-top:8px">Khi lưu hoàn thiện, hệ thống xóa link/file PDF - Word xuất kho cũ. Lần bấm PDF/Word sau sẽ tạo bản hoàn thành mới.</div></div>`;
-  };
-
-  window.pv17CompleteRowHTML = function(x,i){
-    const sx=x.soLuongXuatKho||x.soLuongCan||'';
-    return `<tr><td style="text-align:center">${i+1}</td><td><input value="${esc(x.tenVatTu||'')}" data-k="tenVatTu"><input type="hidden" data-k="nguonVatTu" value="${esc(x.nguonVatTu||'')}"><input type="hidden" data-k="cumLinhKien" value="${esc(x.cumLinhKien||'')}"><input type="hidden" data-k="maVatTu" value="${esc(x.maVatTu||'')}"><input type="hidden" data-k="donViTinh" value="${esc(x.donViTinh||'')}"></td><td><input type="number" min="0" value="${esc(String(sx))}" data-k="soLuongXuatKho"></td><td><input type="number" min="0" value="${esc(String(x.soLuongSuDung||''))}" data-k="soLuongSuDung"></td><td><input type="number" min="0" value="${esc(String(x.soLuongNhapKho||''))}" data-k="soLuongNhapKho"></td><td><select data-k="tinhTrangNhapKho">${['','Mới','Cũ','Tốt','Hỏng'].map(s=>`<option ${s===(x.tinhTrangNhapKho||'')?'selected':''}>${s}</option>`).join('')}</select></td><td><input value="${esc(x.ghiChu||'')}" data-k="ghiChu"></td><td><select data-k="loaiDong"><option ${String(x.loaiDong||'Chuẩn bị')==='Chuẩn bị'?'selected':''}>Chuẩn bị</option><option ${String(x.loaiDong||'')==='Phát sinh'?'selected':''}>Phát sinh</option></select></td></tr>`;
-  };
-
-  window.pv17AddCompleteRow = function(){
-    const tb=document.querySelector('#pv18_complete_table tbody') || document.querySelector('#pv17_complete_table tbody');
-    if(!tb)return;
-    tb.insertAdjacentHTML('beforeend',pv17CompleteRowHTML({loaiDong:'Phát sinh'},tb.children.length));
-  };
-
-  window.pv17CollectCompleteItems = function(){
-    return Array.from(document.querySelectorAll('#pv18_complete_table tbody tr, #pv17_complete_table tbody tr')).map((tr,i)=>{const obj={stt:i+1};tr.querySelectorAll('[data-k]').forEach(el=>obj[el.dataset.k]=el.value);obj.soLuongCan=obj.soLuongXuatKho;return obj;}).filter(x=>String(x.tenVatTu||'').trim());
-  };
-
-  window.pv16RenderCompletePage=window.pv17RenderCompletePage;
-  window.pv16SubmitComplete=window.pv17SubmitComplete;
-})();
-</script>
-
-
-<!-- V19 hotfix: fixed sidebar, hide old export-material menu, add PDF/Word actions to waiting list, and use dropdowns for receiver/material incident rows -->
-<style id="pv19-sidebar-complete-selects-style">
-  @media (min-width:769px){
-    .layout{display:block !important;overflow:visible !important;}
-    .sidebar{
-      position:fixed !important;
-      top:54px !important;
-      left:0 !important;
-      bottom:0 !important;
-      height:calc(100vh - 54px) !important;
-      z-index:160 !important;
-      overflow-y:auto !important;
-    }
-    .content{
-      margin-left:206px !important;
-      width:calc(100% - 206px) !important;
-      max-width:calc(100% - 206px) !important;
-      flex:none !important;
-      height:calc(100vh - 54px) !important;
-      overflow-y:auto !important;
-    }
-  }
-  @media (max-width:768px){
-    .content{margin-left:0 !important;width:100% !important;max-width:100% !important;}
-  }
-  #ni-danhSachPhieu{display:none !important;}
-  .bg-p{background:#f5f3ff;color:var(--pu);border:1px solid #ddd6fe}.bg-p:hover{background:#ede9fe}
-  #pvCompleteRoot .pv18-actions,#pvCompleteRoot .pv19-actions{display:flex;gap:5px;align-items:center;justify-content:flex-start;flex-wrap:wrap;}
-  #pvCompleteRoot .pv19-actions .btn{margin:1px 0;}
-  .pv19-mat-select{min-width:210px;}
-</style>
-<script id="pv19-sidebar-complete-selects-js">
-(function(){
-  function esc(s){return (typeof pvEsc==='function')?pvEsc(s):String(s??'').replace(/[&<>\"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[c]||c;});}
-  function js(s){return (typeof pvJs==='function')?pvJs(s):String(s??'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");}
-  function norm(s){return (typeof pvNorm==='function')?pvNorm(s):String(s??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();}
-  function getObj(o,keys){
-    if(!o)return '';
-    if(typeof pvGetObj==='function')return pvGetObj(o,keys)||'';
-    for(const k of keys){if(o[k]!==undefined&&o[k]!==null&&String(o[k]).trim())return String(o[k]).trim();}
-    return '';
-  }
-  function uniq(list){
-    const out=[],seen={};
-    (list||[]).forEach(v=>{v=String(v||'').trim();if(!v)return;const k=norm(v);if(!seen[k]){seen[k]=1;out.push(v);}});
-    return out;
-  }
-  const PHAT_SINH='Ph\u00e1t sinh';
-  const CHUAN_BI='Chu\u1ea9n b\u1ecb';
-
-  window.pv19PeopleList=function(){
-    const names=[];
-    try{((window.PV&&PV.data&&PV.data.ktv)||[]).forEach(x=>names.push(typeof x==='string'?x:getObj(x,['H\u1ecd V\u00e0 T\u00ean','H\u1ecd v\u00e0 t\u00ean','T\u00ean k\u1ef9 thu\u1eadt','name','fullName'])));}catch(e){}
-    try{if(typeof KTV_LIST!=='undefined')KTV_LIST.forEach(n=>names.push(n));}catch(e){}
-    try{if(Array.isArray(window.USERS))USERS.forEach(u=>names.push(u.name||u.fullName||u.username||''));}catch(e){}
-    try{if(window.CU)names.push(CU.name||CU.fullName||CU.u||'');}catch(e){}
-    return uniq(names);
-  };
-  window.pv19PeopleOptionsHTML=function(selected){
-    selected=String(selected||'').trim();
-    let list=pv19PeopleList();
-    if(selected&&!list.some(n=>norm(n)===norm(selected)))list=[selected].concat(list);
-    return `<option value="">-- Ch\u1ecdn ng\u01b0\u1eddi nh\u1eadp kho --</option>`+list.map(n=>`<option value="${esc(n)}" ${norm(n)===norm(selected)?'selected':''}>${esc(n)}</option>`).join('');
-  };
-
-  function matName(x){return (typeof pvTenVatTu==='function')?pvTenVatTu(x):getObj(x,['T\u00ean Chi Ti\u1ebft / Linh Ki\u1ec7n Thay Th\u1ebf','T\u00ean v\u1eadt t\u01b0','tenVatTu','lk']);}
-  function matCum(x){return (typeof pvCum==='function')?pvCum(x):getObj(x,['C\u1ee5m Linh Ki\u1ec7n','C\u1ee5m linh ki\u1ec7n','cumLinhKien','cum']);}
-  window.pv19MaterialList=function(){
-    let arr=[];
-    try{if(window.PV&&PV.data&&Array.isArray(PV.data.vatTu))arr=arr.concat(PV.data.vatTu);}catch(e){}
-    try{
-      if((!arr||!arr.length)&&typeof PARTS_MAP!=='undefined'){
-        Object.entries(PARTS_MAP).forEach(([cum,parts])=>(parts||[]).forEach(p=>arr.push({'T\u00ean v\u1eadt t\u01b0':p,'C\u1ee5m linh ki\u1ec7n':cum})));
-      }
-    }catch(e){}
-    const out=[],seen={};
-    (arr||[]).forEach(x=>{
-      const name=matName(x); if(!name)return;
-      const k=norm(name); if(seen[k])return; seen[k]=1;
-      out.push({tenVatTu:name,cumLinhKien:matCum(x),maVatTu:getObj(x,['M\u00e3 v\u1eadt t\u01b0','Ma vat tu','maVatTu']),donViTinh:getObj(x,['\u0110VT','\u0110\u01a1n v\u1ecb t\u00ednh','DVT','donViTinh'])});
-    });
-    return out;
-  };
-  window.pv19UsedMaterialSet=function(skipTr){
-    const used={};
-    document.querySelectorAll('#pv18_complete_table tbody tr,#pv17_complete_table tbody tr').forEach(tr=>{
-      if(skipTr&&tr===skipTr)return;
-      const el=tr.querySelector('[data-k="tenVatTu"]');
-      const v=el?String(el.value||'').trim():'';
-      if(v)used[norm(v)]=1;
-    });
-    return used;
-  };
-  window.pv19MatOptionsHTML=function(selected,skipTr){
-    selected=String(selected||'').trim();
-    const used=pv19UsedMaterialSet(skipTr);
-    const list=pv19MaterialList().filter(m=>!used[norm(m.tenVatTu)]||norm(m.tenVatTu)===norm(selected));
-    return `<option value="">-- Ch\u1ecdn v\u1eadt t\u01b0 ph\u00e1t sinh --</option>`+list.map(m=>{
-      const label=[m.tenVatTu,m.cumLinhKien].filter(Boolean).join(' - ');
-      return `<option value="${esc(m.tenVatTu)}" ${norm(m.tenVatTu)===norm(selected)?'selected':''}>${esc(label)}</option>`;
+  window.pvBDSCRenderSelected = function(){
+    const box=document.getElementById('pvb_selectedItems'); if(!box)return;
+    if(!PV.data.selected.length){box.innerHTML='<i style="font-size:12px;color:var(--mu)">Chưa chọn vật tư.</i>';return;}
+    box.innerHTML=PV.data.selected.map(x=>{
+      const loaiBadge = x.loaiVatTu
+        ? `<span style="font-size:10px;padding:2px 8px;border-radius:99px;background:${x.loaiVatTu==='Thay thế'?'#fee2e2':x.loaiVatTu==='Sửa chữa'?'#fef3c7':'#dbeafe'};color:${x.loaiVatTu==='Thay thế'?'#991b1b':x.loaiVatTu==='Sửa chữa'?'#92400e':'#1e40af'};font-weight:700;white-space:nowrap">${pvEsc(x.loaiVatTu)}</span>`
+        : '';
+      return `<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--bd);border-radius:8px;margin-bottom:5px;background:#fff;flex-wrap:wrap">
+        <div style="flex:1;min-width:120px;font-size:12px"><b>${pvEsc(x.tenVatTu)}</b><br><span style="color:var(--mu);font-size:10px">${pvEsc(x.cumLinhKien)} · ${pvEsc(x.nguonVatTu)}</span></div>
+        ${loaiBadge}
+        <input type="number" min="0" value="${pvEsc(String(x.soLuongCan))}" style="width:60px;border:1.5px solid var(--bd);border-radius:6px;padding:3px 6px;font-size:11px;text-align:center" onchange="pvBDSCUpdQty('${pvJs(x.id)}',this.value)">
+        <select style="border:1.5px solid var(--bd);border-radius:6px;padding:3px 5px;font-size:11px" onchange="pvBDSCUpdSt('${pvJs(x.id)}',this.value)">${['Mới','Cũ','Tốt','K.xđ'].map(s=>`<option ${s===x.tinhTrangXuatKho?'selected':''}>${s}</option>`).join('')}</select>
+        ${x.fixed?`<span style="font-size:10px;color:var(--mu)">Cố định</span>`:`<button class="btn bg-r sm" onclick="pvBDSCRemoveMat('${pvJs(x.id)}')">Bỏ</button>`}
+      </div>`;
     }).join('');
   };
-  window.pv19OnMatSelect=function(sel){
-    const tr=sel.closest('tr'); if(!tr)return;
-    const mat=pv19MaterialList().find(m=>norm(m.tenVatTu)===norm(sel.value));
-    const set=(k,v)=>{const el=tr.querySelector(`[data-k="${k}"]`); if(el)el.value=v||'';};
-    if(mat){set('cumLinhKien',mat.cumLinhKien);set('maVatTu',mat.maVatTu);set('donViTinh',mat.donViTinh);set('nguonVatTu',PHAT_SINH);}
-    const loai=tr.querySelector('[data-k="loaiDong"]'); if(loai)loai.value=PHAT_SINH;
-    pv19RefreshMaterialSelects();
-  };
-  window.pv19RefreshMaterialSelects=function(){
-    document.querySelectorAll('select.pv19-mat-select').forEach(sel=>{
-      const cur=sel.value;
-      sel.innerHTML=pv19MatOptionsHTML(cur,sel.closest('tr'));
-      sel.value=cur;
+})();
+
+/* ──────────────────────────────────────────────────────────
+ * COMPLETE WORKFLOW (Hoàn thành phiếu)
+ * Full rewrite of V16/V17/V18/V19 complete page
+ * ──────────────────────────────────────────────────────────*/
+(function(){
+  const LOAI_OPTS = ['Thay thế','Sửa chữa','Bảo dưỡng định kỳ'];
+  const ESC = s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const JS  = s=>String(s??'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+  const NORM= s=>(typeof pvNorm==='function')?pvNorm(s):String(s??'').toLowerCase().trim();
+
+  function isCompleted(r){return NORM(r.trangThai||'').includes('hoan thanh');}
+
+  function peopleList(){
+    const names=[];
+    try{((window.PV&&PV.data&&PV.data.ktv)||[]).forEach(x=>names.push(typeof x==='string'?x:(pvGetObj?pvGetObj(x,['Họ Và Tên','Họ và tên','name','fullName']):'')));}catch(e){}
+    try{if(typeof KTV_LIST!=='undefined')KTV_LIST.forEach(n=>names.push(n));}catch(e){}
+    try{if(window.CU)names.push(CU.name||CU.fullName||CU.u||'');}catch(e){}
+    const out=[],seen={};
+    (names||[]).forEach(v=>{v=String(v||'').trim();if(!v)return;const k=NORM(v);if(!seen[k]){seen[k]=1;out.push(v);}});
+    return out;
+  }
+
+  function matList(){
+    let arr=[];
+    try{if(window.PV&&PV.data&&Array.isArray(PV.data.vatTu))arr=arr.concat(PV.data.vatTu);}catch(e){}
+    const out=[],seen={};
+    (arr||[]).forEach(x=>{
+      const name=(typeof pvTenVatTu==='function')?pvTenVatTu(x):String(x['Tên vật tư']||x['Tên Chi Tiết / Linh Kiện Thay Thế']||'').trim();
+      if(!name)return; const k=NORM(name); if(seen[k])return; seen[k]=1;
+      out.push({tenVatTu:name,cumLinhKien:(typeof pvCum==='function')?pvCum(x):''});
     });
-  };
-  window.pv19OnLoaiDongChange=function(sel){
+    return out;
+  }
+
+  function completeRowHTML(x,i){
+    x=x||{};
+    const sx=x.soLuongXuatKho||x.soLuongCan||'';
+    const isPhatSinh=NORM(x.loaiDong||'').includes('phat sinh')||NORM(x.nguonVatTu||'').includes('phat sinh')||!String(x.tenVatTu||'').trim();
+    const used={};
+    // material cell
+    let matCtl;
+    if(isPhatSinh){
+      const usedSel=NORM(x.tenVatTu||'');
+      matCtl=`<select class="v25-mat-sel" data-k="tenVatTu" onchange="v25OnMatSel(this)" style="font-size:11px;width:100%;border:1px solid var(--bd);border-radius:5px;padding:3px 5px">
+        <option value="">-- Chọn vật tư phát sinh --</option>
+        ${matList().map(m=>`<option value="${ESC(m.tenVatTu)}" ${NORM(m.tenVatTu)===usedSel?'selected':''}>${ESC([m.tenVatTu,m.cumLinhKien].filter(Boolean).join(' - '))}</option>`).join('')}
+      </select>`;
+    } else {
+      matCtl=`<input value="${ESC(x.tenVatTu||'')}" data-k="tenVatTu" style="font-size:11px;width:100%;border:1px solid var(--bd);border-radius:5px;padding:3px 5px">`;
+    }
+    // loai vattu
+    const curLoai=String(x.loaiVatTu||LOAI_OPTS[0]);
+    const loaiCtl=`<select data-k="loaiVatTu" style="font-size:11px;width:100%;border:1.5px solid #a7f3d0;border-radius:5px;padding:3px 5px;background:#f0fdf4;color:#065f46;font-weight:600">
+      ${LOAI_OPTS.map(l=>`<option value="${ESC(l)}" ${l===curLoai?'selected':''}>${ESC(l)}</option>`).join('')}
+    </select>`;
+    return `<tr>
+      <td style="text-align:center;padding:5px">${i+1}</td>
+      <td style="padding:5px">${matCtl}
+        <input type="hidden" data-k="nguonVatTu" value="${ESC(x.nguonVatTu||'')}">
+        <input type="hidden" data-k="cumLinhKien" value="${ESC(x.cumLinhKien||'')}">
+        <input type="hidden" data-k="maVatTu" value="${ESC(x.maVatTu||'')}">
+        <input type="hidden" data-k="donViTinh" value="${ESC(x.donViTinh||'')}">
+      </td>
+      <td style="padding:5px">${loaiCtl}</td>
+      <td style="padding:5px"><input type="number" min="0" value="${ESC(String(sx))}" data-k="soLuongXuatKho" style="width:100%;font-size:11px;border:1px solid var(--bd);border-radius:5px;padding:3px 5px"></td>
+      <td style="padding:5px"><input type="number" min="0" value="${ESC(String(x.soLuongSuDung||''))}" data-k="soLuongSuDung" style="width:100%;font-size:11px;border:1px solid var(--bd);border-radius:5px;padding:3px 5px"></td>
+      <td style="padding:5px"><input type="number" min="0" value="${ESC(String(x.soLuongNhapKho||''))}" data-k="soLuongNhapKho" style="width:100%;font-size:11px;border:1px solid var(--bd);border-radius:5px;padding:3px 5px"></td>
+      <td style="padding:5px"><select data-k="tinhTrangNhapKho" style="font-size:11px;width:100%;border:1px solid var(--bd);border-radius:5px;padding:3px 5px">
+        ${['','Mới','Cũ','Tốt','Hỏng'].map(s=>`<option ${s===(x.tinhTrangNhapKho||'')?'selected':''}>${s}</option>`).join('')}
+      </select></td>
+      <td style="padding:5px"><input value="${ESC(x.ghiChu||'')}" data-k="ghiChu" style="font-size:11px;width:100%;border:1px solid var(--bd);border-radius:5px;padding:3px 5px"></td>
+      <td style="padding:5px"><select data-k="loaiDong" onchange="v25OnLoaiDongChg(this)" style="font-size:11px;width:100%;border:1px solid var(--bd);border-radius:5px;padding:3px 5px">
+        <option ${!isPhatSinh?'selected':''}>Chuẩn bị</option>
+        <option ${isPhatSinh?'selected':''}>Phát sinh</option>
+      </select></td>
+    </tr>`;
+  }
+
+  window.v25OnMatSel = function(sel){
     const tr=sel.closest('tr'); if(!tr)return;
-    if(sel.value!==PHAT_SINH)return;
-    const holder=tr.children[1]; if(!holder)return;
+    const mat=matList().find(m=>NORM(m.tenVatTu)===NORM(sel.value));
+    const set=(k,v)=>{const e=tr.querySelector(`[data-k="${k}"]`);if(e)e.value=v||'';};
+    if(mat){set('cumLinhKien',mat.cumLinhKien);set('nguonVatTu','Phát sinh');}
+    const loai=tr.querySelector('[data-k="loaiDong"]');if(loai)loai.value='Phát sinh';
+  };
+
+  window.v25OnLoaiDongChg = function(sel){
+    if(sel.value!=='Phát sinh')return;
+    const tr=sel.closest('tr');if(!tr)return;
+    const holder=tr.children[1];if(!holder)return;
     const old=holder.querySelector('[data-k="tenVatTu"]');
     if(old&&old.tagName!=='SELECT'){
       const val=old.value||'';
-      old.outerHTML=`<select class="pv19-mat-select" data-k="tenVatTu" onchange="pv19OnMatSelect(this)">${pv19MatOptionsHTML(val,tr)}</select>`;
-      const nsel=holder.querySelector('select.pv19-mat-select'); if(nsel)nsel.value=val;
+      const sel2=document.createElement('select');
+      sel2.className='v25-mat-sel'; sel2.dataset.k='tenVatTu';
+      sel2.setAttribute('onchange','v25OnMatSel(this)');
+      sel2.style.cssText='font-size:11px;width:100%;border:1px solid var(--bd);border-radius:5px;padding:3px 5px';
+      sel2.innerHTML=`<option value="">-- Chọn vật tư phát sinh --</option>`+
+        matList().map(m=>`<option value="${ESC(m.tenVatTu)}" ${NORM(m.tenVatTu)===NORM(val)?'selected':''}>${ESC([m.tenVatTu,m.cumLinhKien].filter(Boolean).join(' - '))}</option>`).join('');
+      old.replaceWith(sel2);
     }
-    pv19RefreshMaterialSelects();
   };
 
-  window.pv17CompleteRowHTML=function(x,i){
-    x=x||{};
-    const sx=x.soLuongXuatKho||x.soLuongCan||'';
-    const loai=String(x.loaiDong||(!String(x.tenVatTu||'').trim()?PHAT_SINH:CHUAN_BI));
-    const isPhatSinh=norm(loai)===norm(PHAT_SINH)||norm(x.nguonVatTu||'')===norm(PHAT_SINH)||!String(x.tenVatTu||'').trim();
-    const matCtl=isPhatSinh?`<select class="pv19-mat-select" data-k="tenVatTu" onchange="pv19OnMatSelect(this)">${pv19MatOptionsHTML(x.tenVatTu||'',null)}</select>`:`<input value="${esc(x.tenVatTu||'')}" data-k="tenVatTu">`;
-    // Loại vật tư dropdown
-    const pm=window.PARTS_LOAI_MAP||{};
-    const loaiKey=(x.cumLinhKien||'')+'___'+(x.tenVatTu||'');
-    const loaiOptsArr=pm[loaiKey]||[];
-    const loaiVatTuCtl=loaiOptsArr.length>0
-      ?`<select data-k="loaiVatTu" style="border:1.5px solid #a7f3d0;border-radius:6px;padding:3px 5px;font-size:11px;background:#f0fdf4;color:#065f46;font-weight:600;width:100%"><option value="">Chọn loại...</option>${loaiOptsArr.map(l=>`<option value="${esc(l)}" ${l===(x.loaiVatTu||'')?'selected':''}>${esc(l)}</option>`).join('')}</select>`
-      :`<input value="${esc(x.loaiVatTu||'')}" data-k="loaiVatTu" placeholder="—" style="font-size:11px">`;
-    return `<tr><td style="text-align:center">${i+1}</td><td>${matCtl}<input type="hidden" data-k="nguonVatTu" value="${esc(x.nguonVatTu||'')}"><input type="hidden" data-k="cumLinhKien" value="${esc(x.cumLinhKien||'')}"><input type="hidden" data-k="maVatTu" value="${esc(x.maVatTu||'')}"><input type="hidden" data-k="donViTinh" value="${esc(x.donViTinh||'')}"></td><td>${loaiVatTuCtl}</td><td><input type="number" min="0" value="${esc(String(sx))}" data-k="soLuongXuatKho"></td><td><input type="number" min="0" value="${esc(String(x.soLuongSuDung||''))}" data-k="soLuongSuDung"></td><td><input type="number" min="0" value="${esc(String(x.soLuongNhapKho||''))}" data-k="soLuongNhapKho"></td><td><select data-k="tinhTrangNhapKho">${['','Mới','Cũ','Tốt','Hỏng'].map(s=>`<option ${s===(x.tinhTrangNhapKho||'')?'selected':''}>${s}</option>`).join('')}</select></td><td><input value="${esc(x.ghiChu||'')}" data-k="ghiChu"></td><td><select data-k="loaiDong" onchange="pv19OnLoaiDongChange(this)"><option ${norm(loai)===norm(CHUAN_BI)?'selected':''}>${CHUAN_BI}</option><option ${norm(loai)===norm(PHAT_SINH)?'selected':''}>${PHAT_SINH}</option></select></td></tr>`;
+  window.v25AddCompleteRow = function(){
+    const tb=document.querySelector('#v25_complete_table tbody'); if(!tb)return;
+    tb.insertAdjacentHTML('beforeend',completeRowHTML({loaiDong:'Phát sinh',nguonVatTu:'Phát sinh'},tb.children.length));
   };
-  window.pv17AddCompleteRow=function(){
-    const tb=document.querySelector('#pv18_complete_table tbody')||document.querySelector('#pv17_complete_table tbody');
-    if(!tb)return;
-    tb.insertAdjacentHTML('beforeend',pv17CompleteRowHTML({loaiDong:PHAT_SINH,nguonVatTu:PHAT_SINH},tb.children.length));
-    pv19RefreshMaterialSelects();
-  };
-  window.pv17CollectCompleteItems=function(){
-    return Array.from(document.querySelectorAll('#pv18_complete_table tbody tr,#pv17_complete_table tbody tr')).map((tr,i)=>{
+
+  window.v25CollectCompleteItems = function(){
+    return Array.from(document.querySelectorAll('#v25_complete_table tbody tr')).map((tr,i)=>{
       const obj={stt:i+1};
       tr.querySelectorAll('[data-k]').forEach(el=>obj[el.dataset.k]=el.value);
       obj.soLuongCan=obj.soLuongXuatKho;
@@ -7990,54 +7790,128 @@ nav=function(p){
     }).filter(x=>String(x.tenVatTu||'').trim());
   };
 
-  function rowDone(r){return (typeof pv17IsCompleted==='function')?pv17IsCompleted(r):norm(r.trangThai||'').indexOf('hoan thanh')>=0;}
-  window.pv17ListRowsHTML=function(rows,mode){
-    if(!rows||!rows.length){return `<div class="cb"><i>${mode==='done'?'Ch\u01b0a c\u00f3 phi\u1ebfu \u0111\u00e3 ho\u00e0n th\u00e0nh.':'Kh\u00f4ng c\u00f3 phi\u1ebfu xu\u1ea5t c\u1ea7n c\u1eadp nh\u1eadt.'}</i></div>`;}
-    return `<div class="tblwrap"><table class="tbl"><thead><tr><th style="width:130px">M\u00e3 phi\u1ebfu</th><th style="width:130px">Ng\u00e0y t\u1ea1o</th><th style="width:150px">M\u00e3 m\u00e1y</th><th>T\u00ean tr\u1ea1i</th><th style="width:150px">\u0110\u1ed9i tr\u01b0\u1edfng</th><th style="width:150px">M\u1ee5c \u0111\u00edch</th><th style="width:110px">Tr\u1ea1ng th\u00e1i</th><th style="width:230px">Thao t\u00e1c</th></tr></thead><tbody>${rows.map(r=>`<tr><td><b>${esc(r.maPhieu)}</b></td><td>${esc(r.ngayTao)}</td><td>${esc(r.danhSachMaMay||r.maMay)}</td><td>${esc(r.danhSachTenTrai||r.tenTrai)}</td><td>${esc(r.doiTruong)}</td><td>${esc(r.mucDich)}</td><td><span class="b ${rowDone(r)?'bg':'ba'}">${esc(r.trangThai||'\u0110\u00e3 t\u1ea1o')}</span></td><td><div class="pv19-actions"><button class="btn bg-a sm" onclick="pvBDSCPreviewSaved('${js(r.maPhieu)}')">\ud83d\udc41 Xem</button><button class="btn bg-g sm" onclick="pvBDSCExportPdf('${js(r.maPhieu)}')">PDF</button><button class="btn bg-p sm" onclick="pvBDSCExportWord('${js(r.maPhieu)}')">Word</button>${mode==='wait'?`<button class="btn bg-b sm" onclick="pv17OpenComplete('${js(r.maPhieu)}')">\ud83d\udd04 C\u1eadp nh\u1eadt</button>`:''}</div></td></tr>`).join('')}</tbody></table></div>`;
-  };
-  window.pv17RenderCompletePage=function(){
+  function listRowsHTML(rows,mode){
+    if(!rows||!rows.length){return `<div style="padding:24px;text-align:center;color:var(--mu);font-style:italic">${mode==='wait'?'Không có phiếu cần cập nhật.':'Chưa có phiếu đã hoàn thành.'}</div>`;}
+    return `<div style="overflow-x:auto"><table class="tbl" style="min-width:900px"><thead><tr>
+      <th>Mã phiếu</th><th>Ngày tạo</th><th>Mã máy</th><th>Tên trại</th>
+      <th>Đội trưởng</th><th>Mục đích</th><th>Trạng thái</th><th>Thao tác</th>
+    </tr></thead><tbody>${rows.map(r=>`<tr>
+      <td><b>${ESC(r.maPhieu)}</b></td><td>${ESC(r.ngayTao)}</td>
+      <td>${ESC(r.danhSachMaMay||r.maMay)}</td><td>${ESC(r.danhSachTenTrai||r.tenTrai)}</td>
+      <td>${ESC(r.doiTruong)}</td><td>${ESC(r.mucDich)}</td>
+      <td><span class="b ${isCompleted(r)?'bg':'ba'}">${ESC(r.trangThai||'Đã tạo')}</span></td>
+      <td><div style="display:flex;gap:4px;flex-wrap:wrap">
+        <button class="btn bg-a sm" onclick="pvBDSCPreviewSaved('${JS(r.maPhieu)}')">👁 Xem</button>
+        <button class="btn bg-g sm" onclick="pvBDSCExportPdf('${JS(r.maPhieu)}')">PDF</button>
+        <button class="btn bg-p sm" onclick="pvBDSCExportWord('${JS(r.maPhieu)}')">Word</button>
+        ${mode==='wait'?`<button class="btn bg-b sm" onclick="v25OpenComplete('${JS(r.maPhieu)}')">🔄 Cập nhật</button>`:''}
+      </div></td>
+    </tr>`).join('')}</tbody></table></div>`;
+  }
+
+  window.v25RenderCompletePage = function(){
     const root=document.getElementById('pvCompleteRoot'); if(!root)return;
     const pg=document.getElementById('pg-hoanThanhPhieu');
-    if(pg){pg.style.maxWidth='none';pg.style.width='100%';pg.style.margin='0';pg.style.padding='16px 20px';}
+    if(pg){pg.style.maxWidth='none';pg.style.width='100%';pg.style.margin='0';pg.style.padding='20px 24px';}
     document.querySelectorAll('.nitem').forEach(x=>x.classList.remove('on'));
     document.getElementById('ni-hoanThanhPhieu')?.classList.add('on');
-    const list=(_pvBDSCListCache&&_pvBDSCListCache.length?_pvBDSCListCache:(typeof pvBDSCReadListCache_==='function'?pvBDSCReadListCache_():[]))||[];
-    const wait=list.filter(r=>!rowDone(r));
-    const done=list.filter(r=>rowDone(r));
-    root.innerHTML=`<div class="card"><div class="cb" style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap"><b>Danh s\u00e1ch phi\u1ebfu xu\u1ea5t v\u1eadt t\u01b0 ch\u1edd c\u1eadp nh\u1eadt (${wait.length})</b><button class="btn bg-g sm" onclick="pvBDSCRefreshHistory_(true).then(()=>pv17RenderCompletePage())">\u21bb L\u00e0m m\u1edbi</button></div>${pv17ListRowsHTML(wait,'wait')}</div><div class="card" style="margin-top:14px"><div class="cb"><b>Danh s\u00e1ch phi\u1ebfu \u0111\u00e3 ho\u00e0n th\u00e0nh (${done.length})</b></div>${pv17ListRowsHTML(done,'done')}</div>`;
-    pv19UpdateSidebarBadge();
-  };
-  window.pv17RenderCompleteForm=function(root,phieu,items){
-    const dt=new Date();dt.setMinutes(dt.getMinutes()-dt.getTimezoneOffset());
-    const selectedNguoi=phieu.nguoiNhapKho||(window.CU&&(CU.name||CU.fullName))||'';
-    root.innerHTML=`<div class="card"><div class="cb pv18-form-head"><div><b>C\u1eadp nh\u1eadt ho\u00e0n th\u00e0nh phi\u1ebfu: ${esc(phieu.maPhieu)}</b><div class="pv17-small">${esc(phieu.danhSachMaMay||phieu.maMay)} \u00b7 ${esc(phieu.danhSachTenTrai||phieu.tenTrai)}</div></div><button class="btn sm" onclick="pv17RenderCompletePage()">\u2190 Quay l\u1ea1i</button></div><div class="pv18-form-grid"><div class="iw"><div class="il">Ng\u00e0y gi\u1edd nh\u1eadp kho *</div><input class="inp" type="datetime-local" id="pv17_ngayNhap" value="${dt.toISOString().slice(0,16)}"></div><div class="iw"><div class="il">Ng\u01b0\u1eddi nh\u1eadp kho *</div><select class="inp" id="pv17_nguoiNhap">${pv19PeopleOptionsHTML(selectedNguoi)}</select></div></div><div class="pv18-scroll" style="margin-top:12px"><table id="pv18_complete_table"><thead><tr><th style="width:44px">STT</th><th style="width:260px">H\u1ea1ng m\u1ee5c v\u1eadt t\u01b0</th><th style="width:110px">Lo\u1ea1i v\u1eadt t\u01b0</th><th style="width:90px">SL xu\u1ea5t kho</th><th style="width:90px">SL s\u1eed d\u1ee5ng</th><th style="width:90px">SL nh\u1eadp kho</th><th style="width:130px">T\u00ecnh tr\u1ea1ng nh\u1eadp</th><th style="width:150px">Ghi ch\u00fa</th><th style="width:105px">Lo\u1ea1i d\u00f2ng</th></tr></thead><tbody>${(items||[]).map((x,i)=>pv17CompleteRowHTML(x,i)).join('')}</tbody></table></div><div class="pv18-form-actions"><button class="btn bg-a sm" onclick="pv17AddCompleteRow()">\u2795 Th\u00eam v\u1eadt t\u01b0 ph\u00e1t sinh</button><button class="btn bg-g" onclick="pv17SubmitComplete('${js(phieu.maPhieu)}')">\u2705 L\u01b0u ho\u00e0n thi\u1ec7n</button></div><div class="ih" style="margin-top:8px">Khi l\u01b0u ho\u00e0n thi\u1ec7n, h\u1ec7 th\u1ed1ng x\u00f3a link/file PDF - Word xu\u1ea5t kho c\u0169. L\u1ea7n b\u1ea5m PDF/Word sau s\u1ebd t\u1ea1o b\u1ea3n ho\u00e0n th\u00e0nh m\u1edbi.</div></div>`;
-    setTimeout(pv19RefreshMaterialSelects,0);
+    const list=(window._pvBDSCListCache&&window._pvBDSCListCache.length?window._pvBDSCListCache:(typeof pvBDSCReadListCache_==='function'?pvBDSCReadListCache_():[]))||[];
+    const wait=list.filter(r=>!isCompleted(r));
+    const done=list.filter(r=>isCompleted(r));
+    root.innerHTML=`
+      <div class="card">
+        <div class="cb" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+          <b>Danh sách phiếu xuất chờ cập nhật (${wait.length})</b>
+          <button class="btn bg-g sm" onclick="pvBDSCRefreshHistory_(false).then(()=>v25RenderCompletePage())">↻ Làm mới</button>
+        </div>
+        ${listRowsHTML(wait,'wait')}
+      </div>
+      <div class="card" style="margin-top:14px">
+        <div class="cb"><b>Phiếu đã hoàn thành (${done.length})</b></div>
+        ${listRowsHTML(done,'done')}
+      </div>`;
+    /* update badge */
+    const el=document.getElementById('nb-phieu-complete');if(el)el.textContent=wait.length||'';
   };
 
-  function applySidebar(){
-    const old=document.getElementById('ni-danhSachPhieu'); if(old)old.style.display='none';
-    const cur=document.getElementById('ni-hoanThanhPhieu'); if(cur){cur.style.display='flex';cur.querySelector('span')&&(cur.querySelector('span').id='nb-phieu-complete');}
-    pv19UpdateSidebarBadge();
-  }
-  window.pv19UpdateSidebarBadge=function(){
+  window.v25OpenComplete = async function(maPhieu){
+    const root=document.getElementById('pvCompleteRoot'); if(!root)return;
+    root.innerHTML='<div class="card"><div class="cb">⏳ Đang mở phiếu...</div></div>';
     try{
-      const list=(_pvBDSCListCache&&_pvBDSCListCache.length?_pvBDSCListCache:(typeof pvBDSCReadListCache_==='function'?pvBDSCReadListCache_():[]))||[];
-      const wait=list.filter(r=>!rowDone(r)).length;
-      const el=document.getElementById('nb-phieu-complete'); if(el)el.textContent=wait;
-    }catch(e){}
+      const d=await pvApi('getPhieuDetail',{maPhieu});
+      v25RenderCompleteForm(root,d.phieu,d.items||[]);
+    }catch(e){root.innerHTML=`<div class="card"><div class="cb" style="color:var(--red)">❌ ${ESC(e.message)}</div></div>`;}
   };
-  const oldBadge=window.pvBDSCUpdateBadge;
-  window.pvBDSCUpdateBadge=function(count){
-    if(typeof oldBadge==='function')oldBadge(count);
-    const el=document.getElementById('nb-phieu-complete');
-    if(el&&typeof count==='number'&&!(_pvBDSCListCache&&_pvBDSCListCache.length))el.textContent=count;
-    pv19UpdateSidebarBadge();
-    applySidebar();
+
+  window.v25RenderCompleteForm = function(root,phieu,items){
+    const dt=new Date();dt.setMinutes(dt.getMinutes()-dt.getTimezoneOffset());
+    const selNguoi=phieu.nguoiNhapKho||(window.CU&&(CU.name||CU.fullName))||'';
+    const curNorm=NORM(selNguoi);
+    const pplOpts=`<option value="">-- Chọn người nhập kho --</option>`+
+      peopleList().map(n=>`<option value="${ESC(n)}" ${NORM(n)===curNorm?'selected':''}>${ESC(n)}</option>`).join('');
+    root.innerHTML=`<div class="card">
+      <div class="cb" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+        <div>
+          <b>Cập nhật hoàn thành phiếu: ${ESC(phieu.maPhieu)}</b>
+          <div style="font-size:11px;color:var(--mu)">${ESC(phieu.danhSachMaMay||phieu.maMay)} · ${ESC(phieu.danhSachTenTrai||phieu.tenTrai)}</div>
+        </div>
+        <button class="btn sm" onclick="v25RenderCompletePage()">← Quay lại</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px">
+        <div class="iw">
+          <div class="il">Ngày giờ nhập kho *</div>
+          <input class="inp" type="datetime-local" id="v25_ngayNhap" value="${dt.toISOString().slice(0,16)}">
+        </div>
+        <div class="iw">
+          <div class="il">Người nhập kho *</div>
+          <select class="inp" id="v25_nguoiNhap">${pplOpts}</select>
+        </div>
+      </div>
+      <div style="overflow-x:auto;margin-top:14px">
+        <table id="v25_complete_table" style="width:100%;border-collapse:collapse;font-size:12px;min-width:1000px">
+          <thead style="background:#e8f7f0">
+            <tr>
+              <th style="padding:8px 6px;border:1px solid var(--bd);width:44px;color:#083d24">STT</th>
+              <th style="padding:8px 6px;border:1px solid var(--bd);min-width:220px;color:#083d24">Hạng mục vật tư</th>
+              <th style="padding:8px 6px;border:1px solid var(--bd);width:120px;color:#083d24">Loại</th>
+              <th style="padding:8px 6px;border:1px solid var(--bd);width:90px;color:#083d24">SL xuất kho</th>
+              <th style="padding:8px 6px;border:1px solid var(--bd);width:90px;color:#083d24">SL sử dụng</th>
+              <th style="padding:8px 6px;border:1px solid var(--bd);width:90px;color:#083d24">SL nhập kho</th>
+              <th style="padding:8px 6px;border:1px solid var(--bd);width:120px;color:#083d24">Tình trạng nhập</th>
+              <th style="padding:8px 6px;border:1px solid var(--bd);min-width:140px;color:#083d24">Ghi chú</th>
+              <th style="padding:8px 6px;border:1px solid var(--bd);width:100px;color:#083d24">Loại dòng</th>
+            </tr>
+          </thead>
+          <tbody>${(items||[]).map((x,i)=>completeRowHTML(x,i)).join('')}</tbody>
+        </table>
+      </div>
+      <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <button class="btn bg-a sm" onclick="v25AddCompleteRow()">➕ Thêm vật tư phát sinh</button>
+        <button class="btn bg-g" onclick="v25SubmitComplete('${JS(phieu.maPhieu)}')">✅ Lưu hoàn thành</button>
+      </div>
+      <div class="ih" style="margin-top:8px">Khi lưu hoàn thành, PDF/Word cũ sẽ bị xóa. Bấm PDF/Word sau sẽ tạo bản mới đã hoàn thành.</div>
+    </div>`;
   };
-  const oldNav=window.nav;
+
+  window.v25SubmitComplete = async function(maPhieu){
+    const ngay=(typeof pvBDSCFmtDT==='function'?pvBDSCFmtDT:v=>v)(document.getElementById('v25_ngayNhap')?.value||'');
+    const nguoi=(document.getElementById('v25_nguoiNhap')?.value||'').trim();
+    if(!ngay)return toast('Thiếu ngày giờ nhập kho','err');
+    if(!nguoi)return toast('Thiếu người nhập kho','err');
+    const items=v25CollectCompleteItems();
+    if(!items.length)return toast('Chưa có vật tư','err');
+    try{
+      await pvApi('completePhieu',{maPhieu,payload:{ngayGioNhapKho:ngay,nguoiNhapKho:nguoi,items}});
+      toast('✅ Đã hoàn thành phiếu','ok');
+      await pvBDSCRefreshHistory_(true);
+      v25RenderCompletePage();
+    }catch(e){toast('❌ '+e.message,'err');}
+  };
+
+  /* Wire to navigation */
+  const _oldNav=window.nav;
   window.nav=function(p){
-    if(p==='danhSachPhieu')p='hoanThanhPhieu';
-    if(p==='hoanThanhPhieu'){
+    if(p==='danhSachPhieu'||p==='hoanThanhPhieu'){
       if(window.innerWidth<=768&&typeof closeSidebar==='function')closeSidebar();
       document.querySelectorAll('.page').forEach(x=>x.classList.remove('on'));
       document.querySelectorAll('.nitem').forEach(x=>x.classList.remove('on'));
@@ -8045,702 +7919,49 @@ nav=function(p){
       document.getElementById('ni-hoanThanhPhieu')?.classList.add('on');
       window.curPage='hoanThanhPhieu';
       if(typeof pvBDSCStartPolling_==='function')pvBDSCStartPolling_();
-      pv17RenderCompletePage();
+      v25RenderCompletePage();
+      if(typeof pvBDSCRefreshHistory_==='function')pvBDSCRefreshHistory_(true).then(()=>v25RenderCompletePage());
       return;
     }
-    if(typeof oldNav==='function')return oldNav(p);
+    if(typeof _oldNav==='function')return _oldNav.apply(this,arguments);
   };
-  window.pv16RenderCompletePage=window.pv17RenderCompletePage;
-  window.pv16SubmitComplete=window.pv17SubmitComplete;
+
+  /* Update sidebar badge & show hoanThanhPhieu */
+  function applySidebar(){
+    const old=document.getElementById('ni-danhSachPhieu');if(old)old.style.display='none';
+    const cur=document.getElementById('ni-hoanThanhPhieu');
+    if(cur){
+      cur.style.display='flex';
+      const sp=cur.querySelector('span');if(sp&&!sp.id)sp.id='nb-phieu-complete';
+    }
+    /* update badge */
+    const list=(window._pvBDSCListCache&&window._pvBDSCListCache.length?window._pvBDSCListCache:(typeof pvBDSCReadListCache_==='function'?pvBDSCReadListCache_():[]))||[];
+    const wait=list.filter(r=>!isCompleted(r)).length;
+    const el=document.getElementById('nb-phieu-complete');if(el)el.textContent=wait||'';
+  }
+  const _oldBadge=window.pvBDSCUpdateBadge;
+  window.pvBDSCUpdateBadge=function(count){
+    if(typeof _oldBadge==='function')_oldBadge(count);
+    applySidebar();
+  };
+
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',applySidebar);else applySidebar();
-  setTimeout(applySidebar,300);
-  setTimeout(applySidebar,900);
+  setTimeout(applySidebar,300); setTimeout(applySidebar,900);
+
+  /* Expose legacy aliases */
+  window.pv17RenderCompletePage=window.v25RenderCompletePage;
+  window.pv16RenderCompletePage=window.v25RenderCompletePage;
+  window.pv17RenderCompleteForm=window.v25RenderCompleteForm;
+  window.pv16RenderCompleteForm=window.v25RenderCompleteForm;
 })();
+
+/* ──────────────────────────────────────────────────────────
+ * V25 STABLE LAYOUT — Single authoritative CSS
+ * No more interval-based forceful style resets
+ * ──────────────────────────────────────────────────────────*/
 </script>
-
-<!-- V20 hotfix: align main layout, keep sidebar fixed without overlaying content -->
-<style id="pv20-layout-aligned-style">
-  @media (min-width:769px){
-    html,body{height:100% !important;overflow:hidden !important;}
-    #app{height:100vh !important;min-height:0 !important;display:flex;flex-direction:column;overflow:hidden !important;}
-    .topbar{height:54px !important;min-height:54px !important;flex:0 0 54px !important;position:sticky !important;top:0 !important;z-index:200 !important;}
-    .layout{
-      display:flex !important;
-      flex:1 1 auto !important;
-      min-height:0 !important;
-      height:calc(100vh - 54px) !important;
-      overflow:hidden !important;
-      width:100% !important;
-    }
-    .sidebar{
-      position:relative !important;
-      top:auto !important;
-      left:auto !important;
-      right:auto !important;
-      bottom:auto !important;
-      width:206px !important;
-      min-width:206px !important;
-      max-width:206px !important;
-      height:100% !important;
-      flex:0 0 206px !important;
-      z-index:2 !important;
-      overflow-y:auto !important;
-      transform:none !important;
-      box-shadow:none !important;
-    }
-    .content{
-      margin-left:0 !important;
-      width:auto !important;
-      max-width:none !important;
-      flex:1 1 auto !important;
-      min-width:0 !important;
-      height:100% !important;
-      overflow-y:auto !important;
-      overflow-x:hidden !important;
-      background:var(--bg) !important;
-    }
-    .page{
-      box-sizing:border-box !important;
-      margin-left:auto !important;
-      margin-right:auto !important;
-    }
-    #pg-taoPhieu,
-    #pg-danhSachPhieu,
-    #pg-hoanThanhPhieu{
-      max-width:none !important;
-      width:100% !important;
-      margin:0 !important;
-      padding:16px 20px !important;
-    }
-    #pvFormRoot,
-    #pvHistoryRoot,
-    #pvCompleteRoot,
-    #pvb_formWrap{
-      width:100% !important;
-      max-width:none !important;
-      margin:0 !important;
-    }
-    #pvCompleteRoot .card,
-    #pvFormRoot .card,
-    #pvHistoryRoot .card,
-    #pvb_formWrap .fsec{
-      width:100% !important;
-      max-width:none !important;
-      margin-left:0 !important;
-      margin-right:0 !important;
-    }
-  }
-  @media (max-width:768px){
-    html,body{overflow:auto !important;}
-    .layout{display:flex !important;overflow:visible !important;}
-    .content{margin-left:0 !important;width:100% !important;max-width:100% !important;overflow-y:auto !important;}
-  }
-</style>
-<script id="pv20-layout-aligned-js">
-(function(){
-  function resetMainScroll(){
-    try{ window.scrollTo(0,0); }catch(e){}
-    try{ const c=document.querySelector('.content'); if(c)c.scrollTop=0; }catch(e){}
-  }
-  function alignLayout(){
-    try{
-      const content=document.querySelector('.content');
-      const sidebar=document.getElementById('mainSidebar')||document.querySelector('.sidebar');
-      if(window.innerWidth>768){
-        if(content){
-          content.style.marginLeft='0';
-          content.style.width='';
-          content.style.maxWidth='';
-        }
-        if(sidebar){
-          sidebar.classList.remove('open');
-          sidebar.style.transform='none';
-        }
-        const ov=document.getElementById('mobOverlay');
-        if(ov)ov.classList.remove('show');
-      }
-    }catch(e){}
-  }
-  const oldNav=window.nav;
-  window.nav=function(p){
-    const ret=oldNav.apply(this,arguments);
-    setTimeout(function(){alignLayout();resetMainScroll();},0);
-    setTimeout(function(){alignLayout();},150);
-    return ret;
-  };
-  window.addEventListener('resize',alignLayout);
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',alignLayout);else alignLayout();
-  setTimeout(alignLayout,300);
-  setTimeout(alignLayout,1000);
-})();
-</script>
-
-<!-- V21 hotfix: unlock page scroll for material pages + Enter to login -->
-<style id="pv21-scroll-enter-fix-style">
-  @media (min-width:769px){
-    html,
-    body{
-      height:auto !important;
-      min-height:100% !important;
-      overflow-y:auto !important;
-      overflow-x:hidden !important;
-    }
-    body{
-      position:static !important;
-    }
-    #app{
-      height:auto !important;
-      min-height:100vh !important;
-      overflow:visible !important;
-    }
-    .topbar{
-      position:sticky !important;
-      top:0 !important;
-      height:54px !important;
-      min-height:54px !important;
-      z-index:220 !important;
-    }
-    .layout{
-      display:block !important;
-      width:100% !important;
-      height:auto !important;
-      min-height:calc(100vh - 54px) !important;
-      overflow:visible !important;
-    }
-    .sidebar{
-      position:fixed !important;
-      top:54px !important;
-      left:0 !important;
-      bottom:0 !important;
-      width:206px !important;
-      min-width:206px !important;
-      max-width:206px !important;
-      height:calc(100vh - 54px) !important;
-      flex:none !important;
-      overflow-y:auto !important;
-      overflow-x:hidden !important;
-      z-index:180 !important;
-      transform:none !important;
-      box-shadow:none !important;
-    }
-    .content{
-      display:block !important;
-      margin-left:206px !important;
-      width:calc(100% - 206px) !important;
-      max-width:calc(100% - 206px) !important;
-      min-width:0 !important;
-      height:auto !important;
-      min-height:calc(100vh - 54px) !important;
-      overflow:visible !important;
-      background:var(--bg) !important;
-      box-sizing:border-box !important;
-    }
-    #pg-taoPhieu,
-    #pg-danhSachPhieu,
-    #pg-hoanThanhPhieu{
-      max-width:none !important;
-      width:100% !important;
-      margin:0 !important;
-      padding:16px 20px 90px !important;
-      box-sizing:border-box !important;
-    }
-    #pvFormRoot,
-    #pvHistoryRoot,
-    #pvCompleteRoot,
-    #pvb_formWrap{
-      width:100% !important;
-      max-width:none !important;
-      margin:0 !important;
-      box-sizing:border-box !important;
-    }
-    #pvb_formWrap .fsec,
-    #pvFormRoot .card,
-    #pvHistoryRoot .card,
-    #pvCompleteRoot .card{
-      width:100% !important;
-      max-width:none !important;
-      margin-left:0 !important;
-      margin-right:0 !important;
-      box-sizing:border-box !important;
-    }
-    #pvCompleteRoot .tblwrap,
-    #pvCompleteRoot .pv18-scroll,
-    #pvCompleteRoot .pv17-scroll,
-    #pvFormRoot .tblwrap,
-    #pvHistoryRoot .tblwrap{
-      max-width:100% !important;
-      overflow-x:auto !important;
-      overflow-y:visible !important;
-    }
-  }
-  @media (max-width:768px){
-    html,
-    body{
-      height:auto !important;
-      min-height:100% !important;
-      overflow-y:auto !important;
-      overflow-x:hidden !important;
-    }
-    #app,
-    .layout,
-    .content{
-      height:auto !important;
-      min-height:100vh !important;
-      overflow:visible !important;
-    }
-    .content{
-      margin-left:0 !important;
-      width:100% !important;
-      max-width:100% !important;
-    }
-    #pg-taoPhieu,
-    #pg-danhSachPhieu,
-    #pg-hoanThanhPhieu{
-      padding-bottom:90px !important;
-    }
-  }
-</style>
-<script id="pv21-scroll-enter-fix-js">
-(function(){
-  function keepLayoutScrollable(){
-    try{
-      var content=document.querySelector('.content');
-      var sidebar=document.getElementById('mainSidebar')||document.querySelector('.sidebar');
-      if(window.innerWidth>768){
-        if(content){
-          content.style.setProperty('margin-left','206px','important');
-          content.style.setProperty('width','calc(100% - 206px)','important');
-          content.style.setProperty('max-width','calc(100% - 206px)','important');
-          content.style.setProperty('height','auto','important');
-          content.style.setProperty('overflow','visible','important');
-        }
-        if(sidebar){
-          sidebar.classList.remove('open');
-          sidebar.style.setProperty('position','fixed','important');
-          sidebar.style.setProperty('top','54px','important');
-          sidebar.style.setProperty('left','0','important');
-          sidebar.style.setProperty('bottom','0','important');
-          sidebar.style.setProperty('height','calc(100vh - 54px)','important');
-          sidebar.style.setProperty('transform','none','important');
-        }
-        var ov=document.getElementById('mobOverlay');
-        if(ov)ov.classList.remove('show');
-      }else if(content){
-        content.style.setProperty('margin-left','0','important');
-        content.style.setProperty('width','100%','important');
-        content.style.setProperty('max-width','100%','important');
-      }
-      document.documentElement.style.setProperty('overflow-y','auto','important');
-      document.body.style.setProperty('overflow-y','auto','important');
-      document.body.style.setProperty('overflow-x','hidden','important');
-    }catch(e){}
-  }
-
-  function enableEnterLogin(){
-    try{
-      ['lu','lp'].forEach(function(id){
-        var el=document.getElementById(id);
-        if(!el || el.dataset.enterLoginBound==='1')return;
-        el.dataset.enterLoginBound='1';
-        el.addEventListener('keydown',function(ev){
-          if((ev.key==='Enter' || ev.keyCode===13) && !ev.isComposing){
-            ev.preventDefault();
-            if(typeof login==='function')login();
-          }
-        });
-      });
-    }catch(e){}
-  }
-
-  var oldNav=window.nav;
-  if(typeof oldNav==='function' && !oldNav.__pv21Wrapped){
-    var wrapped=function(){
-      var ret=oldNav.apply(this,arguments);
-      setTimeout(keepLayoutScrollable,0);
-      setTimeout(keepLayoutScrollable,150);
-      setTimeout(keepLayoutScrollable,600);
-      return ret;
-    };
-    wrapped.__pv21Wrapped=true;
-    window.nav=wrapped;
-  }
-
-  window.pv21KeepLayoutScrollable=keepLayoutScrollable;
-  function boot(){enableEnterLogin();keepLayoutScrollable();}
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
-  window.addEventListener('resize',keepLayoutScrollable);
-  setTimeout(boot,300);
-  setTimeout(boot,1000);
-  setInterval(function(){
-    enableEnterLogin();
-    if(window.CU)keepLayoutScrollable();
-  },2500);
-})();
-</script>
-
-<!-- V24 stable layout restore: natural flex layout + fixed topbar + sticky sidebar -->
-<style id="pv24-stable-layout-restore">
-  :root{--pv24-topbar-h:54px;--pv24-mobile-topbar-h:50px;--pv24-sidebar-w:206px;}
-
-  @media (min-width:769px){
-    html,body{
-      height:auto !important;
-      min-height:100% !important;
-      overflow-y:auto !important;
-      overflow-x:hidden !important;
-      scroll-behavior:auto !important;
-    }
-    body{position:static !important;background:var(--bg) !important;}
-
-    #app{
-      display:flex;
-      flex-direction:column !important;
-      min-height:100vh !important;
-      height:auto !important;
-      padding-top:var(--pv24-topbar-h) !important;
-      overflow:visible !important;
-      box-sizing:border-box !important;
-    }
-
-    .topbar{
-      position:fixed !important;
-      top:0 !important;
-      left:0 !important;
-      right:0 !important;
-      width:100% !important;
-      height:var(--pv24-topbar-h) !important;
-      min-height:var(--pv24-topbar-h) !important;
-      z-index:3000 !important;
-      transform:none !important;
-    }
-
-    .layout{
-      display:flex !important;
-      flex:1 1 auto !important;
-      position:relative !important;
-      top:auto !important;
-      left:auto !important;
-      right:auto !important;
-      bottom:auto !important;
-      width:100% !important;
-      min-height:calc(100vh - var(--pv24-topbar-h)) !important;
-      height:auto !important;
-      margin:0 !important;
-      padding:0 !important;
-      overflow:visible !important;
-      align-items:flex-start !important;
-      box-sizing:border-box !important;
-    }
-
-    .sidebar{
-      position:sticky !important;
-      top:var(--pv24-topbar-h) !important;
-      left:auto !important;
-      bottom:auto !important;
-      width:var(--pv24-sidebar-w) !important;
-      min-width:var(--pv24-sidebar-w) !important;
-      max-width:var(--pv24-sidebar-w) !important;
-      height:calc(100vh - var(--pv24-topbar-h)) !important;
-      flex:0 0 var(--pv24-sidebar-w) !important;
-      overflow-y:auto !important;
-      overflow-x:hidden !important;
-      transform:none !important;
-      z-index:1000 !important;
-      box-shadow:none !important;
-      box-sizing:border-box !important;
-    }
-
-    .content{
-      position:relative !important;
-      top:auto !important;
-      left:auto !important;
-      right:auto !important;
-      bottom:auto !important;
-      display:block !important;
-      flex:1 1 auto !important;
-      min-width:0 !important;
-      width:auto !important;
-      max-width:none !important;
-      height:auto !important;
-      min-height:calc(100vh - var(--pv24-topbar-h)) !important;
-      margin:0 !important;
-      padding:0 !important;
-      overflow:visible !important;
-      background:var(--bg) !important;
-      box-sizing:border-box !important;
-    }
-
-    .page{
-      box-sizing:border-box !important;
-    }
-    .page:not(.on){display:none !important;}
-    .page.on{display:block !important;}
-
-    #pg-taoPhieu,
-    #pg-danhSachPhieu,
-    #pg-hoanThanhPhieu{
-      width:100% !important;
-      max-width:none !important;
-      min-height:auto !important;
-      margin:0 !important;
-      padding:16px 20px 110px 20px !important;
-      overflow:visible !important;
-      box-sizing:border-box !important;
-    }
-
-    #pg-taoPhieu > .ph,
-    #pg-danhSachPhieu > .ph,
-    #pg-hoanThanhPhieu > .ph{
-      margin:0 0 14px 0 !important;
-      padding:0 !important;
-      text-align:left !important;
-      display:block !important;
-    }
-
-    #pvFormRoot,
-    #pvHistoryRoot,
-    #pvCompleteRoot,
-    #pvb_formWrap{
-      width:100% !important;
-      max-width:none !important;
-      margin:0 !important;
-      padding:0 !important;
-      box-sizing:border-box !important;
-    }
-
-    #pvb_formWrap .fsec,
-    #pvFormRoot .card,
-    #pvHistoryRoot .card,
-    #pvCompleteRoot .card{
-      width:100% !important;
-      max-width:none !important;
-      margin-left:0 !important;
-      margin-right:0 !important;
-      box-sizing:border-box !important;
-      overflow:visible !important;
-    }
-
-    #pvFormRoot .tblwrap,
-    #pvHistoryRoot .tblwrap,
-    #pvCompleteRoot .tblwrap,
-    #pvCompleteRoot .pv17-scroll,
-    #pvCompleteRoot .pv18-scroll,
-    #pvCompleteRoot .pv19-scroll{
-      width:100% !important;
-      max-width:100% !important;
-      overflow-x:auto !important;
-      overflow-y:visible !important;
-      box-sizing:border-box !important;
-    }
-
-    .pv-actions,
-    .pv18-form-actions,
-    .pv19-actions{
-      position:sticky !important;
-      bottom:0 !important;
-      z-index:900 !important;
-    }
-  }
-
-  @media (max-width:768px){
-    html,body{
-      height:auto !important;
-      min-height:100% !important;
-      overflow-y:auto !important;
-      overflow-x:hidden !important;
-    }
-    #app{
-      padding-top:var(--pv24-mobile-topbar-h) !important;
-      min-height:100vh !important;
-      height:auto !important;
-      overflow:visible !important;
-    }
-    .topbar{
-      position:fixed !important;
-      top:0 !important;
-      left:0 !important;
-      right:0 !important;
-      width:100% !important;
-      height:var(--pv24-mobile-topbar-h) !important;
-      min-height:var(--pv24-mobile-topbar-h) !important;
-      z-index:3000 !important;
-    }
-    .layout,.content{
-      height:auto !important;
-      min-height:calc(100vh - var(--pv24-mobile-topbar-h)) !important;
-      overflow:visible !important;
-    }
-    .content{
-      width:100% !important;
-      max-width:100% !important;
-      margin-left:0 !important;
-    }
-    .sidebar{
-      top:var(--pv24-mobile-topbar-h) !important;
-      height:calc(100vh - var(--pv24-mobile-topbar-h)) !important;
-      z-index:2500 !important;
-    }
-    #pg-taoPhieu,
-    #pg-danhSachPhieu,
-    #pg-hoanThanhPhieu{
-      width:100% !important;
-      max-width:none !important;
-      margin:0 !important;
-      padding:14px 10px 100px 10px !important;
-      box-sizing:border-box !important;
-    }
-  }
-</style>
-<script id="pv24-stable-layout-restore-js">
-(function(){
-  var DESKTOP_TOP=54, MOBILE_TOP=50;
-  function isDesk(){return window.innerWidth>768;}
-  function setImp(el,p,v){if(el)el.style.setProperty(p,v,'important');}
-
-  function resetScroll(){
-    try{history.scrollRestoration='manual';}catch(e){}
-    try{window.scrollTo(0,0);}catch(e){}
-    try{document.documentElement.scrollTop=0;document.body.scrollTop=0;}catch(e){}
-    try{var c=document.querySelector('.content'); if(c){c.scrollTop=0;c.scrollLeft=0;}}catch(e){}
-  }
-
-  function applyLayout(){
-    try{
-      var desk=isDesk(), h=desk?DESKTOP_TOP:MOBILE_TOP;
-      var topbar=document.querySelector('.topbar');
-      var layout=document.querySelector('.layout');
-      var sidebar=document.getElementById('mainSidebar')||document.querySelector('.sidebar');
-      var content=document.querySelector('.content');
-      var app=document.getElementById('app');
-
-      document.documentElement.style.setProperty('--pv24-topbar-h',DESKTOP_TOP+'px');
-      document.documentElement.style.setProperty('--pv24-mobile-topbar-h',MOBILE_TOP+'px');
-
-      if(desk){
-        setImp(document.documentElement,'overflow-y','auto');
-        setImp(document.body,'overflow-y','auto');
-        setImp(document.body,'overflow-x','hidden');
-        setImp(document.body,'position','static');
-      }
-      if(app){
-        setImp(app,'padding-top',h+'px');
-        setImp(app,'height','auto');
-        setImp(app,'min-height','100vh');
-        setImp(app,'overflow','visible');
-      }
-      if(topbar){
-        setImp(topbar,'position','fixed');
-        setImp(topbar,'top','0');
-        setImp(topbar,'left','0');
-        setImp(topbar,'right','0');
-        setImp(topbar,'width','100%');
-        setImp(topbar,'height',h+'px');
-        setImp(topbar,'min-height',h+'px');
-        setImp(topbar,'z-index','3000');
-      }
-      if(layout){
-        setImp(layout,'display','flex');
-        setImp(layout,'position','relative');
-        setImp(layout,'top','auto');
-        setImp(layout,'left','auto');
-        setImp(layout,'right','auto');
-        setImp(layout,'bottom','auto');
-        setImp(layout,'height','auto');
-        setImp(layout,'min-height','calc(100vh - '+h+'px)');
-        setImp(layout,'margin','0');
-        setImp(layout,'overflow','visible');
-      }
-      if(sidebar){
-        if(desk){
-          sidebar.classList.remove('open');
-          setImp(sidebar,'position','sticky');
-          setImp(sidebar,'top',h+'px');
-          setImp(sidebar,'left','auto');
-          setImp(sidebar,'bottom','auto');
-          setImp(sidebar,'width','206px');
-          setImp(sidebar,'min-width','206px');
-          setImp(sidebar,'max-width','206px');
-          setImp(sidebar,'flex','0 0 206px');
-          setImp(sidebar,'height','calc(100vh - '+h+'px)');
-          setImp(sidebar,'overflow-y','auto');
-          setImp(sidebar,'transform','none');
-          var ov=document.getElementById('mobOverlay'); if(ov)ov.classList.remove('show');
-        }else{
-          setImp(sidebar,'top',h+'px');
-          setImp(sidebar,'height','calc(100vh - '+h+'px)');
-        }
-      }
-      if(content){
-        setImp(content,'position','relative');
-        setImp(content,'top','auto');
-        setImp(content,'left','auto');
-        setImp(content,'right','auto');
-        setImp(content,'bottom','auto');
-        setImp(content,'flex','1 1 auto');
-        setImp(content,'min-width','0');
-        setImp(content,'width',desk?'auto':'100%');
-        setImp(content,'max-width','none');
-        setImp(content,'height','auto');
-        setImp(content,'min-height','calc(100vh - '+h+'px)');
-        setImp(content,'margin','0');
-        setImp(content,'overflow','visible');
-      }
-      ['pg-taoPhieu','pg-danhSachPhieu','pg-hoanThanhPhieu'].forEach(function(id){
-        var pg=document.getElementById(id); if(!pg)return;
-        setImp(pg,'width','100%');
-        setImp(pg,'max-width','none');
-        setImp(pg,'margin','0');
-        setImp(pg,'padding',desk?'16px 20px 110px 20px':'14px 10px 100px 10px');
-        setImp(pg,'overflow','visible');
-      });
-    }catch(e){}
-  }
-
-  function enableEnterLogin(){
-    try{
-      ['lu','lp'].forEach(function(id){
-        var el=document.getElementById(id);
-        if(!el || el.__pv24EnterLogin)return;
-        el.__pv24EnterLogin=true;
-        el.addEventListener('keydown',function(ev){
-          if((ev.key==='Enter'||ev.keyCode===13) && !ev.isComposing){
-            ev.preventDefault();
-            if(typeof login==='function')login();
-          }
-        });
-      });
-    }catch(e){}
-  }
-
-  function afterNav(p){
-    applyLayout();
-    if(p==='taoPhieu'||p==='danhSachPhieu'||p==='hoanThanhPhieu') resetScroll();
-    setTimeout(function(){applyLayout(); if(p==='taoPhieu'||p==='danhSachPhieu'||p==='hoanThanhPhieu') resetScroll();},50);
-    setTimeout(applyLayout,300);
-  }
-
-  var oldNav=window.nav;
-  if(typeof oldNav==='function' && !oldNav.__pv24Wrapped){
-    var wrapped=function(p){
-      var ret=oldNav.apply(this,arguments);
-      afterNav(p);
-      return ret;
-    };
-    wrapped.__pv24Wrapped=true;
-    window.nav=wrapped;
-  }
-
-  function boot(){enableEnterLogin();applyLayout();setTimeout(applyLayout,250);setTimeout(applyLayout,1000);}
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
-  window.addEventListener('load',boot);
-  window.addEventListener('resize',applyLayout);
-  setInterval(function(){enableEnterLogin(); if(window.CU)applyLayout();},2000);
-})();
-</script>
-
-<!-- V25: Layout fix + Loại vật tư từ Sheet 4 -->
-<style id="pv25-layout-fix">
-/* Reset xung đột CSS tích lũy — định nghĩa rõ ràng một lần duy nhất */
+<style id="v25-layout">
+/* === STABLE LAYOUT — replaces all V19-V24 hotfixes === */
 @media (min-width:769px){
   html,body{
     height:auto !important;
@@ -8760,27 +7981,23 @@ nav=function(p){
   .topbar{
     position:sticky !important;
     top:0 !important;
-    left:0 !important;
-    right:0 !important;
     width:100% !important;
     height:54px !important;
     min-height:54px !important;
     flex:0 0 54px !important;
     z-index:3000 !important;
-    box-shadow:0 2px 8px rgba(0,0,0,.1) !important;
+    box-shadow:0 2px 8px rgba(0,0,0,.08) !important;
   }
   .layout{
     display:flex !important;
     flex:1 1 auto !important;
-    position:relative !important;
-    height:auto !important;
     min-height:calc(100vh - 54px) !important;
     overflow:visible !important;
+    position:relative !important;
   }
   .sidebar{
     position:sticky !important;
     top:54px !important;
-    left:0 !important;
     width:206px !important;
     min-width:206px !important;
     max-width:206px !important;
@@ -8801,7 +8018,7 @@ nav=function(p){
     min-height:calc(100vh - 54px) !important;
     overflow-y:auto !important;
     overflow-x:hidden !important;
-    position:relative !important;
+    background:var(--bg) !important;
   }
   #pg-taoPhieu,
   #pg-danhSachPhieu,
@@ -8809,21 +8026,34 @@ nav=function(p){
     width:100% !important;
     max-width:none !important;
     margin:0 !important;
-    padding:20px 24px 120px 24px !important;
+    padding:20px 24px 120px !important;
     box-sizing:border-box !important;
   }
   #pvFormRoot,#pvHistoryRoot,#pvCompleteRoot,#pvb_formWrap{
     width:100% !important;
     max-width:none !important;
   }
+  #pvCompleteRoot .card,
+  #pvFormRoot .card,
+  #pvHistoryRoot .card{
+    width:100% !important;
+    max-width:none !important;
+    box-sizing:border-box !important;
+  }
 }
 @media (max-width:768px){
   html,body{overflow-y:auto !important;overflow-x:hidden !important;}
+  #app{padding-top:50px !important;min-height:100vh !important;}
+  .topbar{
+    position:fixed !important;
+    top:0;left:0;right:0;
+    height:50px !important;
+    z-index:3000 !important;
+  }
   .sidebar{
     position:fixed !important;
     top:50px !important;
-    left:0 !important;
-    bottom:0 !important;
+    bottom:0;left:0 !important;
     width:240px !important;
     height:calc(100vh - 50px) !important;
     z-index:2500 !important;
@@ -8833,63 +8063,52 @@ nav=function(p){
   .sidebar.open{transform:translateX(0) !important;}
   .content{margin-left:0 !important;width:100% !important;max-width:100% !important;}
   #pg-taoPhieu,#pg-danhSachPhieu,#pg-hoanThanhPhieu{
-    padding:14px 12px 100px 12px !important;
+    padding:14px 12px 100px !important;
   }
 }
-/* Loại vật tư badge */
-.pv25-loai-badge{
-  display:inline-flex;align-items:center;padding:2px 10px;border-radius:99px;
-  font-size:11px;font-weight:700;background:#ecfdf5;color:#065f46;
-  border:1.5px solid #6ee7b7;white-space:nowrap;
-}
-/* Cải thiện bảng hoàn thành */
-#pv18_complete_table, #pv17_complete_table{
-  min-width:1000px;
-}
-#pv18_complete_table th, #pv17_complete_table th{
-  background:#e8f7f0;color:#083d24;font-weight:800;white-space:nowrap;
-  padding:8px 6px;font-size:11px;
-}
-#pv18_complete_table td, #pv17_complete_table td{
-  padding:5px 6px;vertical-align:middle;
-}
-#pv18_complete_table input, #pv17_complete_table input,
-#pv18_complete_table select, #pv17_complete_table select{
-  width:100%;font-size:11px;border:1px solid var(--bd);border-radius:5px;padding:3px 5px;
-}
-/* Form tạo phiếu — vật tư search item cải thiện */
-.pi-row{
-  transition:.1s;
-}
-.pi-row:hover{
-  background:#f0fdf4 !important;
-}
-</style>
-<script id="pv25-init-js">
-(function(){
-  // Khởi tạo PARTS_LOAI_MAP nếu chưa có
-  if(!window.PARTS_LOAI_MAP) window.PARTS_LOAI_MAP={};
-  // Nếu PARTS_MAP đã có data từ inline data (hard-coded), parse ngay
-  // khi page load để sẵn sàng cho form
-  function initLoaiMap(){
-    if(typeof PARTS_MAP==='undefined') return;
-    // PARTS_MAP chỉ có cum→[lk] không có loai — map sẽ trống cho đến khi Sheet 4 được pull
-    // Giữ PARTS_LOAI_MAP để nhận data từ syncSheet('4')
-  }
-  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',initLoaiMap);
-  else initLoaiMap();
 
-  // Đảm bảo layout đúng sau mỗi nav
-  function enforceLayout(){
-    const desk=window.innerWidth>768;
-    const sidebar=document.getElementById('mainSidebar')||document.querySelector('.sidebar');
-    const content=document.querySelector('.content');
-    if(!desk) return;
-    if(sidebar){ sidebar.classList.remove('open'); }
-    const ov=document.getElementById('mobOverlay'); if(ov) ov.classList.remove('show');
+/* Complete table cells */
+#v25_complete_table td,
+#v25_complete_table th{
+  border:1px solid var(--bd) !important;
+  vertical-align:middle !important;
+}
+#v25_complete_table tr:hover td{background:#fafff9;}
+
+/* Vat tu picker row */
+.pi-row{transition:.12s;}
+.pi-row:hover{background:#f0fdf4 !important;border-color:var(--g) !important;}
+</style>
+<script>
+/* V25 login Enter key — simple, no interval */
+(function(){
+  function attachEnter(){
+    ['lu','lp'].forEach(id=>{
+      const el=document.getElementById(id);
+      if(el&&!el.__v25enter){
+        el.__v25enter=true;
+        el.addEventListener('keydown',function(e){
+          if((e.key==='Enter'||e.keyCode===13)&&!e.isComposing){
+            e.preventDefault();
+            if(typeof login==='function')login();
+          }
+        });
+      }
+    });
   }
-  window.addEventListener('resize',enforceLayout);
-  setTimeout(enforceLayout,500);
-  setTimeout(enforceLayout,1500);
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',attachEnter);else attachEnter();
+  setTimeout(attachEnter,500);
+  /* Sync badge on load */
+  setTimeout(()=>{
+    try{
+      if(typeof pvBDSCReadListCache_==='function'){
+        const cached=pvBDSCReadListCache_();
+        window._pvBDSCListCache=cached;
+        if(typeof pvBDSCUpdateBadge==='function')pvBDSCUpdateBadge(cached.length||0);
+      }
+    }catch(e){}
+  },700);
 })();
 </script>
+</body>
+</html>
