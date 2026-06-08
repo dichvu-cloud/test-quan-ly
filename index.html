@@ -9341,3 +9341,126 @@ nav=function(p){
 })();
 </script>
 
+<!-- V29 hotfix: đồng bộ trạng thái đăng nhập BDSC + Phiếu vật tư -->
+<style id="v29-auth-state-guard-style">
+  body:not(.bdsc-authenticated) #app{
+    display:none !important;
+  }
+  body:not(.bdsc-authenticated) #authWrap{
+    display:flex !important;
+    position:fixed !important;
+    inset:0 !important;
+    z-index:10000 !important;
+    min-height:100dvh !important;
+    overflow:auto !important;
+  }
+  body.bdsc-authenticated #authWrap{
+    display:none !important;
+  }
+  body:not(.bdsc-authenticated){
+    overflow:hidden !important;
+  }
+</style>
+<script id="v29-auth-state-guard-js">
+(function(){
+  function exposeGlobal(name){
+    try{
+      Object.defineProperty(window, name, {
+        configurable:true,
+        get:function(){ return Function('return typeof '+name+'!=="undefined"?'+name+':undefined')(); },
+        set:function(v){ Function('v', name+'=v;')(v); }
+      });
+    }catch(e){
+      try{ window[name] = Function('return typeof '+name+'!=="undefined"?'+name+':undefined')(); }catch(_e){}
+    }
+  }
+  ['CU','PV','USERS','curPage'].forEach(exposeGlobal);
+
+  function normalizeUser(u){
+    if(!u) return u;
+    if(!u.u && u.username) u.u = u.username;
+    if(!u.username && u.u) u.username = u.u;
+    if(!u.name && (u.fullName || u.fullname)) u.name = u.fullName || u.fullname;
+    if(!u.fullName && u.name) u.fullName = u.name;
+    if(!u.role) u.role = 'ktv';
+    if(!u.status) u.status = 'active';
+    if(!u.color) u.color = '#0d6e3f';
+    return u;
+  }
+
+  function syncAuthUI(forceLogged){
+    var logged = (typeof forceLogged === 'boolean') ? forceLogged : !!window.CU;
+    var app = document.getElementById('app');
+    var auth = document.getElementById('authWrap');
+    var ov = document.getElementById('mobOverlay');
+    var sb = document.getElementById('mainSidebar');
+
+    if(logged){
+      try{ normalizeUser(window.CU); }catch(e){}
+      document.body.classList.add('bdsc-authenticated');
+      if(app){
+        app.style.setProperty('display','flex','important');
+        app.style.setProperty('flex-direction','column','important');
+      }
+      if(auth){ auth.style.setProperty('display','none','important'); }
+      document.body.style.removeProperty('overflow');
+      return;
+    }
+
+    document.body.classList.remove('bdsc-authenticated');
+    if(app){ app.style.setProperty('display','none','important'); }
+    if(auth){
+      auth.style.setProperty('display','flex','important');
+      auth.style.setProperty('position','fixed','important');
+      auth.style.setProperty('inset','0','important');
+      auth.style.setProperty('z-index','10000','important');
+      auth.style.setProperty('overflow','auto','important');
+    }
+    if(ov) ov.classList.remove('show');
+    if(sb) sb.classList.remove('open');
+    try{ window.scrollTo(0,0); }catch(e){}
+  }
+  window.syncBDSCAuthUI = syncAuthUI;
+
+  if(typeof window.showApp === 'function' && !window.showApp.__v29AuthGuard){
+    var oldShowApp = window.showApp;
+    window.showApp = function(){
+      try{ normalizeUser(window.CU); }catch(e){}
+      var result = oldShowApp.apply(this, arguments);
+      syncAuthUI(true);
+      return result;
+    };
+    window.showApp.__v29AuthGuard = true;
+  }
+
+  if(typeof window.logout === 'function' && !window.logout.__v29AuthGuard){
+    var oldLogout = window.logout;
+    window.logout = function(){
+      var result;
+      try{ result = oldLogout.apply(this, arguments); }
+      finally{
+        try{ window.CU = null; }catch(e){}
+        try{
+          if(window.PV){
+            window.PV.token = '';
+            window.PV.user = null;
+            window.PV.loaded = false;
+          }
+        }catch(e){}
+        syncAuthUI(false);
+      }
+      return result;
+    };
+    window.logout.__v29AuthGuard = true;
+  }
+
+  function bootAuthGuard(){
+    setTimeout(function(){ syncAuthUI(!!window.CU); }, 0);
+    setTimeout(function(){ syncAuthUI(!!window.CU); }, 250);
+  }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bootAuthGuard);
+  else bootAuthGuard();
+  window.addEventListener('load', bootAuthGuard);
+})();
+</script>
+
