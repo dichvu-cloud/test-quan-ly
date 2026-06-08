@@ -8853,13 +8853,6 @@ nav=function(p){
     selected=String(selected||'').trim();
     return '<option value="">-- Chọn vật tư phát sinh --</option>'+list.filter(m=>m.tenVatTu && (!used[norm(m.tenVatTu)]||norm(m.tenVatTu)===norm(selected))).map(m=>`<option value="${esc(m.tenVatTu)}" ${norm(m.tenVatTu)===norm(selected)?'selected':''}>${esc([m.tenVatTu,m.cumLinhKien].filter(Boolean).join(' - '))}</option>`).join('');
   }
-  window.pv25MaterialOptionsHTML=materialOptionsHTML;
-  window.pv25OnLoaiDongChange=function(sel){
-    const tr=sel.closest('tr'); if(!tr || sel.value!==PHAT_SINH)return;
-    const td=tr.children[1]; if(!td)return;
-    const cur=td.querySelector('[data-k="tenVatTu"]');
-    if(cur && cur.tagName!=='SELECT'){ cur.outerHTML=`<select class="pv19-mat-select" data-k="tenVatTu" onchange="pv25OnCompleteMaterial(this)">${materialOptionsHTML('',tr)}</select>`; }
-  };
   window.pv25OnCompleteMaterial=function(sel){
     const tr=sel.closest('tr'); if(!tr)return;
     const part=findPartByName('',sel.value) || ((PV.data&&PV.data.vatTu)||[]).find(x=>norm(tenVT(x))===norm(sel.value));
@@ -8876,7 +8869,7 @@ nav=function(p){
     x=x||{}; const sx=x.soLuongXuatKho||x.soLuongCan||''; const sp=splitNameLoai(x.cumLinhKien,x.tenVatTu||''); const base=sp.base||x.tenVatTu||''; const curLoai=x.maLoai||sp.loai||'';
     const loai=String(x.loaiDong||(!String(base).trim()?PHAT_SINH:CHUAN_BI)); const isPS=norm(loai)===norm(PHAT_SINH)||norm(x.nguonVatTu||'')===norm(PHAT_SINH)||!String(base).trim();
     const matCtl=isPS?`<select class="pv19-mat-select" data-k="tenVatTu" onchange="pv25OnCompleteMaterial(this)">${materialOptionsHTML(base,null)}</select>`:`<input value="${esc(base)}" data-k="tenVatTu">`;
-    return `<tr><td style="text-align:center">${i+1}</td><td>${matCtl}<input type="hidden" data-k="nguonVatTu" value="${esc(x.nguonVatTu||'')}"><input type="hidden" data-k="cumLinhKien" value="${esc(x.cumLinhKien||cumVT(sp.part)||'')}"><input type="hidden" data-k="maVatTu" value="${esc(x.maVatTu||getObj(sp.part,['Mã vật tư','Ma vat tu','Mã Vật Tư'])||'')}"><input type="hidden" data-k="donViTinh" value="${esc(x.donViTinh||getObj(sp.part,['ĐVT','Đơn vị tính','DVT'])||'')}"></td><td class="pv25-complete-loai">${completeLoaiControl(x.cumLinhKien||cumVT(sp.part),base,curLoai)}</td><td><input type="number" min="0" value="${esc(String(sx))}" data-k="soLuongXuatKho"></td><td><input type="number" min="0" value="${esc(String(x.soLuongSuDung||''))}" data-k="soLuongSuDung"></td><td><input type="number" min="0" value="${esc(String(x.soLuongNhapKho||''))}" data-k="soLuongNhapKho"></td><td><select data-k="tinhTrangNhapKho">${['','Mới','Cũ','Tốt','Hỏng'].map(s=>`<option ${s===(x.tinhTrangNhapKho||'')?'selected':''}>${s}</option>`).join('')}</select></td><td><input value="${esc(x.ghiChu||'')}" data-k="ghiChu"></td><td><select data-k="loaiDong" onchange="pv25OnLoaiDongChange(this)"><option ${norm(loai)===norm(CHUAN_BI)?'selected':''}>${CHUAN_BI}</option><option ${norm(loai)===norm(PHAT_SINH)?'selected':''}>${PHAT_SINH}</option></select></td></tr>`;
+    return `<tr><td style="text-align:center">${i+1}</td><td>${matCtl}<input type="hidden" data-k="nguonVatTu" value="${esc(x.nguonVatTu||'')}"><input type="hidden" data-k="cumLinhKien" value="${esc(x.cumLinhKien||cumVT(sp.part)||'')}"><input type="hidden" data-k="maVatTu" value="${esc(x.maVatTu||getObj(sp.part,['Mã vật tư','Ma vat tu','Mã Vật Tư'])||'')}"><input type="hidden" data-k="donViTinh" value="${esc(x.donViTinh||getObj(sp.part,['ĐVT','Đơn vị tính','DVT'])||'')}"></td><td class="pv25-complete-loai">${completeLoaiControl(x.cumLinhKien||cumVT(sp.part),base,curLoai)}</td><td><input type="number" min="0" value="${esc(String(sx))}" data-k="soLuongXuatKho"></td><td><input type="number" min="0" value="${esc(String(x.soLuongSuDung||''))}" data-k="soLuongSuDung"></td><td><input type="number" min="0" value="${esc(String(x.soLuongNhapKho||''))}" data-k="soLuongNhapKho"></td><td><select data-k="tinhTrangNhapKho">${['','Mới','Cũ','Tốt','Hỏng'].map(s=>`<option ${s===(x.tinhTrangNhapKho||'')?'selected':''}>${s}</option>`).join('')}</select></td><td><input value="${esc(x.ghiChu||'')}" data-k="ghiChu"></td><td><select data-k="loaiDong" onchange="if(this.value==='${PHAT_SINH}'){const tr=this.closest('tr');const td=tr&&tr.children[1];if(td&&!td.querySelector('select[data-k=tenVatTu]')){td.querySelector('[data-k=tenVatTu]').outerHTML='<select class=&quot;pv19-mat-select&quot; data-k=&quot;tenVatTu&quot; onchange=&quot;pv25OnCompleteMaterial(this)&quot;>'+materialOptionsHTML('',tr)+'</select>';}}"><option ${norm(loai)===norm(CHUAN_BI)?'selected':''}>${CHUAN_BI}</option><option ${norm(loai)===norm(PHAT_SINH)?'selected':''}>${PHAT_SINH}</option></select></td></tr>`;
   };
   window.pv17RenderCompleteForm=function(root,phieu,items){
     const dt=new Date();dt.setMinutes(dt.getMinutes()-dt.getTimezoneOffset());
@@ -8909,5 +8902,239 @@ nav=function(p){
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
   window.addEventListener('resize',applyLayout);
   setTimeout(boot,600); setTimeout(boot,1800);
+})();
+</script>
+
+<!-- V26 hotfix: force-load column "Cac loai" from Sheet 4 and Sheet 9, then re-render dropdowns -->
+<style id="pv26-loai-fix-style">
+  .pv26-loai-select{border:1.5px solid #10b981!important;border-radius:7px!important;padding:4px 7px!important;font-size:11px!important;background:#ecfdf5!important;color:#065f46!important;font-weight:800!important;min-width:150px!important;max-width:230px!important;box-sizing:border-box!important;}
+  .pv26-loai-chip{display:inline-flex;align-items:center;gap:4px;font-size:9px;font-weight:900;color:#047857;text-transform:uppercase;letter-spacing:.35px;}
+  .pv26-loai-warn{font-size:10px;color:#b45309;margin-left:6px;}
+  #pv25_complete_table .pv26-loai-select,#pv18_complete_table .pv26-loai-select,#pv17_complete_table .pv26-loai-select{width:100%!important;max-width:none!important;min-width:0!important;}
+</style>
+<script id="pv26-loai-fix-js">
+(function(){
+  const CACHE_KEY='EGREEN_PV26_APPDATA_LOAI';
+  let loading=false;
+  let loadedAt=0;
+
+  function esc(s){return (typeof pvEsc==='function')?pvEsc(s):String(s??'').replace(/[&<>\"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[c]||c;});}
+  function js(s){return (typeof pvJs==='function')?pvJs(s):String(s??'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");}
+  function css(s){return (typeof pvCss==='function')?pvCss(s):String(s??'').replace(/[^a-zA-Z0-9_-]/g,'_');}
+  function norm(s){return (typeof pvNorm==='function')?pvNorm(s):String(s??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\u0111/g,'d').replace(/\u0110/g,'d').toLowerCase().trim().replace(/\s+/g,' ');}
+  function getObj(o,keys){
+    if(!o)return '';
+    const want=(keys||[]).map(norm);
+    for(const k in o){if(want.indexOf(norm(k))>=0)return o[k];}
+    if(typeof pvGetObj==='function')return pvGetObj(o,keys)||'';
+    return '';
+  }
+  function tenVT(x){return (typeof pvTenVatTu==='function')?pvTenVatTu(x):getObj(x,['T\u00ean Chi Ti\u1ebft / Linh Ki\u1ec7n Thay Th\u1ebf','T\u00ean v\u1eadt t\u01b0','tenVatTu','lk']);}
+  function cumVT(x){return (typeof pvCum==='function')?pvCum(x):getObj(x,['C\u1ee5m Linh Ki\u1ec7n','C\u1ee5m linh ki\u1ec7n','cumLinhKien','cum']);}
+  function idVT(x){return (typeof pvMatId==='function')?pvMatId(x):norm(cumVT(x)+'__'+tenVT(x));}
+  function maVT(x){return getObj(x,['M\u00e3 V\u1eadt T\u01b0','M\u00e3 v\u1eadt t\u01b0','Ma vat tu','maVatTu']);}
+  function dvt(x){return getObj(x,['\u0110VT','\u0110\u01a1n v\u1ecb t\u00ednh','DVT','donViTinh']);}
+  function rawLoai(x){return getObj(x,['C\u00e1c lo\u1ea1i','Cac loai','C\u00e1c Lo\u1ea1i','cacLoai','M\u00e3 lo\u1ea1i','Ma loai','Lo\u1ea1i','Loai']);}
+  function unique(arr){const out=[],seen={};(arr||[]).forEach(v=>{v=String(v||'').trim();if(!v)return;const k=norm(v);if(!seen[k]){seen[k]=1;out.push(v);}});return out;}
+  function parseLoai(raw){
+    if(Array.isArray(raw))return unique(raw);
+    raw=String(raw||'').replace(/<br\s*\/?\s*>/gi,'\n').replace(/\r/g,'\n').trim();
+    if(!raw)return [];
+    return unique(raw.split(/\n+|;|\||\s+,\s+|\s+\/\s+/g));
+  }
+  function readCache(){try{return JSON.parse(localStorage.getItem(CACHE_KEY)||'{}')||{};}catch(e){return {};}}
+  function writeCache(d){try{localStorage.setItem(CACHE_KEY,JSON.stringify({time:Date.now(),vatTu:d.vatTu||[],vatTuCoDinh:d.vatTuCoDinh||[]}));}catch(e){}}
+  function cachedData(){const c=readCache();return {vatTu:Array.isArray(c.vatTu)?c.vatTu:[],vatTuCoDinh:Array.isArray(c.vatTuCoDinh)?c.vatTuCoDinh:[]};}
+  function dataSources(){
+    const raw=window.PV26_APPDATA||cachedData();
+    const pv=(window.PV&&PV.data)?PV.data:{};
+    return []
+      .concat(Array.isArray(raw.vatTu)?raw.vatTu:[])
+      .concat(Array.isArray(raw.vatTuCoDinh)?raw.vatTuCoDinh:[])
+      .concat(Array.isArray(pv.vatTu)?pv.vatTu:[])
+      .concat(Array.isArray(pv.vatTuCoDinh)?pv.vatTuCoDinh:[])
+      .concat(Array.isArray(pv.selected)?pv.selected:[]);
+  }
+  function hasLoaiRows(list){return (list||[]).some(x=>parseLoai(rawLoai(x)).length>0);}
+  function mergeRawIntoPV(raw){
+    if(!raw||!window.PV||!PV.data)return;
+    const selected=Array.isArray(PV.data.selected)?PV.data.selected:[];
+    if(Array.isArray(raw.vatTu)&&raw.vatTu.length)PV.data.vatTu=raw.vatTu;
+    if(Array.isArray(raw.vatTuCoDinh)&&raw.vatTuCoDinh.length)PV.data.vatTuCoDinh=raw.vatTuCoDinh;
+    PV.data.selected=selected;
+    try{localStorage.setItem('EGREEN_PV_APPDATA_CACHE_V15',JSON.stringify(PV.data));}catch(e){}
+  }
+  function findLoaiRow(cum,ten){
+    const nCum=norm(cum), nTen=norm(ten);
+    const rows=dataSources().filter(x=>tenVT(x));
+    let r=rows.find(x=>nCum&&norm(cumVT(x))===nCum&&norm(tenVT(x))===nTen&&parseLoai(rawLoai(x)).length);
+    if(r)return r;
+    r=rows.find(x=>norm(tenVT(x))===nTen&&parseLoai(rawLoai(x)).length);
+    if(r)return r;
+    const full=nTen;
+    const candidates=rows.filter(x=>full&&full.startsWith(norm(tenVT(x)))&&parseLoai(rawLoai(x)).length);
+    candidates.sort((a,b)=>String(tenVT(b)).length-String(tenVT(a)).length);
+    return candidates[0]||null;
+  }
+  function getLoaiList(cum,ten){
+    const row=findLoaiRow(cum,ten);
+    if(row)return parseLoai(rawLoai(row));
+    if(window.PARTS_LOAI_MAP){
+      const key=(cum||'')+'__'+(ten||'');
+      return parseLoai(window.PARTS_LOAI_MAP[key]||window.PARTS_LOAI_MAP[norm(cum)+'__'+norm(ten)]);
+    }
+    return [];
+  }
+  window.pv26GetCacLoai=getLoaiList;
+  window.pv25GetCacLoai=getLoaiList;
+  window.pvGetCacLoai=getLoaiList;
+
+  function selectedLoaiControl(id,cum,ten,current){
+    const list=getLoaiList(cum,ten);
+    if(!list.length)return '';
+    current=String(current||'').trim();
+    return `<span class="pv26-loai-chip">Lo\u1ea1i</span><select class="pv26-loai-select" id="pvb_loai_${css(id)}" onchange="pv26UpdateSelectedLoai('${js(id)}',this.value)"><option value="">-- Ch\u1ecdn lo\u1ea1i --</option>${list.map(l=>`<option value="${esc(l)}" ${norm(l)===norm(current)?'selected':''}>${esc(l)}</option>`).join('')}</select>`;
+  }
+  window.pv26UpdateSelectedLoai=function(id,val){
+    const arr=(window.PV&&PV.data&&PV.data.selected)||[];
+    const it=arr.find(x=>x.id===id);
+    if(it)it.maLoai=val||'';
+  };
+
+  const oldSelect=window.pvBDSCSelectMaterial;
+  window.pvBDSCSelectMaterial=function(id,checked){
+    if(!checked)return;
+    const x=((window.PV&&PV.data&&PV.data.vatTu)||[]).find(v=>idVT(v)===id);
+    const before=(PV.data.selected||[]).length;
+    if(typeof oldSelect==='function')oldSelect.apply(this,arguments);
+    const it=((PV.data&&PV.data.selected)||[]).find(v=>v.id===id);
+    if(it){
+      const el=document.getElementById('pvb_pick_loai_'+css(id));
+      if(el)it.maLoai=el.value||'';
+    }
+    if(!it&&x&&before===((PV.data.selected||[]).length)){
+      const qEl=document.getElementById('pvb_qty_'+css(id));
+      const sEl=document.getElementById('pvb_st_'+css(id));
+      const lEl=document.getElementById('pvb_pick_loai_'+css(id));
+      PV.data.selected.push({id:id,tenVatTu:tenVT(x),cumLinhKien:cumVT(x),maVatTu:maVT(x),donViTinh:dvt(x),soLuongCan:qEl?(parseFloat(qEl.value)||1):1,tinhTrangXuatKho:sEl?sEl.value:'M\u1edbi',maLoai:lEl?lEl.value:'',nguonVatTu:'Ch\u1ecdn th\u00eam',fixed:false,included:true,loaiDong:'Chu\u1ea9n b\u1ecb'});
+      if(typeof pvBDSCRenderVatTuSearch==='function')pvBDSCRenderVatTuSearch();
+      if(typeof pvBDSCRenderSelected==='function')pvBDSCRenderSelected();
+    }
+  };
+
+  window.pvBDSCRenderSelected=function(){
+    const box=document.getElementById('pvb_selectedItems'); if(!box)return;
+    const arr=(window.PV&&PV.data&&PV.data.selected)||[];
+    if(!arr.length){box.innerHTML='<i style="font-size:12px;color:var(--mu)">Ch\u01b0a ch\u1ecdn v\u1eadt t\u01b0.</i>';return;}
+    box.innerHTML=arr.map(x=>{
+      const checked=x.included!==false;
+      const id=x.id||norm((x.cumLinhKien||'')+'__'+(x.tenVatTu||''));
+      if(x.id===undefined)x.id=id;
+      const ctl=selectedLoaiControl(id,x.cumLinhKien,x.tenVatTu,x.maLoai);
+      return `<div class="pv25-selected-row ${checked?'':'pv25-dim'}"><input type="checkbox" ${checked?'checked':''} onchange="${typeof pv17ToggleInclude==='function'?'pv17ToggleInclude':'pv16ToggleInclude'}('${js(id)}',this.checked)" style="width:16px;height:16px;accent-color:var(--g);cursor:pointer"><div style="flex:1;min-width:160px;font-size:12px"><b>${esc(x.tenVatTu)}</b><br><span style="color:var(--mu)">${esc(x.cumLinhKien)} \u00b7 ${esc(x.nguonVatTu||'')}</span></div>${ctl}<input type="number" min="0" value="${esc(String(x.soLuongCan||''))}" style="width:60px;border:1.5px solid var(--bd);border-radius:6px;padding:3px 6px;font-size:11px;text-align:center" onchange="pvBDSCUpdQty('${js(id)}',this.value)"><select style="border:1.5px solid var(--bd);border-radius:6px;padding:3px 5px;font-size:11px" onchange="pvBDSCUpdSt('${js(id)}',this.value)">${['M\u1edbi','C\u0169','T\u1ed1t','K.x\u0111'].map(s=>`<option ${s===x.tinhTrangXuatKho?'selected':''}>${s}</option>`).join('')}</select><span style="font-size:10px;color:var(--mu)">${x.fixed?'C\u1ed1 \u0111\u1ecbnh':'Ch\u1ecdn th\u00eam'}</span>${x.fixed?'':`<button class="btn bg-r sm" onclick="pvBDSCRemoveMat('${js(id)}')">B\u1ecf</button>`}</div>`;
+    }).join('');
+  };
+
+  function completeLoaiControl(cum,ten,current){
+    const list=getLoaiList(cum,ten);
+    current=String(current||'').trim();
+    if(!list.length)return `<input type="hidden" data-k="maLoai" value="${esc(current)}">`;
+    return `<select class="pv26-loai-select" data-k="maLoai"><option value="">-- Ch\u1ecdn lo\u1ea1i --</option>${list.map(l=>`<option value="${esc(l)}" ${norm(l)===norm(current)?'selected':''}>${esc(l)}</option>`).join('')}</select>`;
+  }
+  function splitSavedName(cum,full){
+    full=String(full||'').trim();
+    const row=findLoaiRow(cum,full);
+    if(row){return {base:tenVT(row),loai:'',row:row};}
+    const rows=dataSources().filter(x=>tenVT(x));
+    const candidates=rows.filter(x=>full&&norm(full).startsWith(norm(tenVT(x))));
+    candidates.sort((a,b)=>String(tenVT(b)).length-String(tenVT(a)).length);
+    for(const r of candidates){
+      const base=tenVT(r); const list=getLoaiList(cum||cumVT(r),base);
+      for(const l of list){if(norm(full)===norm(base+' '+l)||norm(full)===norm(base+' - '+l)||norm(full).endsWith(norm(l)))return {base:base,loai:l,row:r};}
+      if(norm(full)===norm(base))return {base:base,loai:'',row:r};
+    }
+    return {base:full,loai:'',row:null};
+  }
+  const oldCompleteRow=window.pv17CompleteRowHTML||window.pv16CompleteRowHTML;
+  window.pv17CompleteRowHTML=window.pv16CompleteRowHTML=function(x,i){
+    x=x||{};
+    const sp=splitSavedName(x.cumLinhKien,x.tenVatTu||'');
+    const base=sp.base||x.tenVatTu||'';
+    const cur=x.maLoai||sp.loai||'';
+    const sx=x.soLuongXuatKho||x.soLuongCan||'';
+    const source=String(x.loaiDong||(!String(base).trim()?'Ph\u00e1t sinh':'Chu\u1ea9n b\u1ecb'));
+    return `<tr><td style="text-align:center">${i+1}</td><td><input value="${esc(base)}" data-k="tenVatTu"><input type="hidden" data-k="nguonVatTu" value="${esc(x.nguonVatTu||'')}"><input type="hidden" data-k="cumLinhKien" value="${esc(x.cumLinhKien||cumVT(sp.row)||'')}"><input type="hidden" data-k="maVatTu" value="${esc(x.maVatTu||maVT(sp.row)||'')}"><input type="hidden" data-k="donViTinh" value="${esc(x.donViTinh||dvt(sp.row)||'')}"></td><td class="pv25-complete-loai">${completeLoaiControl(x.cumLinhKien||cumVT(sp.row),base,cur)}</td><td><input type="number" min="0" value="${esc(String(sx))}" data-k="soLuongXuatKho"></td><td><input type="number" min="0" value="${esc(String(x.soLuongSuDung||''))}" data-k="soLuongSuDung"></td><td><input type="number" min="0" value="${esc(String(x.soLuongNhapKho||''))}" data-k="soLuongNhapKho"></td><td><select data-k="tinhTrangNhapKho">${['','M\u1edbi','C\u0169','T\u1ed1t','H\u1ecfng'].map(s=>`<option ${s===(x.tinhTrangNhapKho||'')?'selected':''}>${s}</option>`).join('')}</select></td><td><input value="${esc(x.ghiChu||'')}" data-k="ghiChu"></td><td><select data-k="loaiDong"><option ${norm(source)===norm('Chu\u1ea9n b\u1ecb')?'selected':''}>Chu\u1ea9n b\u1ecb</option><option ${norm(source)===norm('Ph\u00e1t sinh')?'selected':''}>Ph\u00e1t sinh</option></select></td></tr>`;
+  };
+
+  function patchSearchRows(){
+    if(typeof pvBDSCRenderVatTuSearch!=='function')return;
+    const old=window.pvBDSCRenderVatTuSearch;
+    if(old.__pv26)return;
+    const wrapped=function(){
+      old.apply(this,arguments);
+      try{
+        const rows=document.querySelectorAll('.pv25-material-row');
+        rows.forEach(row=>{
+          const nameEl=row.querySelector('b'); if(!nameEl)return;
+          const ten=nameEl.textContent||'';
+          const cum=(nameEl.nextElementSibling&&nameEl.nextElementSibling.textContent)||'';
+          if(row.querySelector('.pv26-loai-select,.pv25-loai-select'))return;
+          const list=getLoaiList(cum,ten);
+          if(!list.length)return;
+          const cb=row.querySelector('input[type="checkbox"]');
+          const id=(cb&&String(cb.getAttribute('onchange')||'').match(/pvBDSCSelectMaterial\('([^']+)'/)||[])[1]||norm(cum+'__'+ten);
+          const html=`<select id="pvb_pick_loai_${css(id)}" class="pv26-loai-select" title="Chon loai"><option value="">-- Lo\u1ea1i --</option>${list.map(l=>`<option value="${esc(l)}">${esc(l)}</option>`).join('')}</select>`;
+          row.insertAdjacentHTML('beforeend',html);
+        });
+      }catch(e){}
+    };
+    wrapped.__pv26=true; window.pvBDSCRenderVatTuSearch=wrapped;
+  }
+
+  function rerenderLoai(){
+    try{patchSearchRows();}catch(e){}
+    try{if(typeof pvBDSCRenderVatTuSearch==='function'&&document.getElementById('pvb_vatTuSearchList'))pvBDSCRenderVatTuSearch();}catch(e){}
+    try{if(typeof pvBDSCRenderSelected==='function'&&document.getElementById('pvb_selectedItems'))pvBDSCRenderSelected();}catch(e){}
+    try{
+      const tbody=document.querySelector('#pv25_complete_table tbody,#pv18_complete_table tbody,#pv17_complete_table tbody');
+      if(tbody){
+        const data=Array.from(tbody.querySelectorAll('tr')).map((tr,i)=>{const o={stt:i+1};tr.querySelectorAll('[data-k]').forEach(el=>o[el.dataset.k]=el.value);return o;});
+        tbody.innerHTML=data.map((x,i)=>window.pv17CompleteRowHTML(x,i)).join('');
+      }
+    }catch(e){}
+  }
+
+  window.pv26LoadLoaiData=async function(force){
+    if(loading)return;
+    const c=cachedData();
+    if(!force && (hasLoaiRows(c.vatTu)||hasLoaiRows(c.vatTuCoDinh))){window.PV26_APPDATA=c;mergeRawIntoPV(c);rerenderLoai();return;}
+    if(!force && Date.now()-loadedAt<60000)return;
+    if(typeof pvApi!=='function')return;
+    loading=true;
+    try{
+      const d=await pvApi('getAppData',{});
+      if(d){window.PV26_APPDATA={vatTu:d.vatTu||[],vatTuCoDinh:d.vatTuCoDinh||[]};loadedAt=Date.now();writeCache(window.PV26_APPDATA);mergeRawIntoPV(window.PV26_APPDATA);rerenderLoai();console.log('[PV26] loaded loai rows', (d.vatTu||[]).length, (d.vatTuCoDinh||[]).length);}
+    }catch(e){console.warn('[PV26] cannot load loai data',e);}
+    finally{loading=false;}
+  };
+
+  const oldFast=window.pvBDSCRefreshFastData_;
+  if(typeof oldFast==='function'&&!oldFast.__pv26){
+    const f=function(){const r=oldFast.apply(this,arguments);mergeRawIntoPV(window.PV26_APPDATA||cachedData());return r;};
+    f.__pv26=true; window.pvBDSCRefreshFastData_=f;
+  }
+  const oldSync=window.pvBDSCSyncInBackground_;
+  if(typeof oldSync==='function'&&!oldSync.__pv26){
+    const s=async function(){const r=await oldSync.apply(this,arguments);mergeRawIntoPV(window.PV26_APPDATA||cachedData());rerenderLoai();return r;};
+    s.__pv26=true; window.pvBDSCSyncInBackground_=s;
+  }
+  const oldNav=window.nav;
+  if(typeof oldNav==='function'&&!oldNav.__pv26Loai){
+    const n=function(){const r=oldNav.apply(this,arguments);setTimeout(()=>window.pv26LoadLoaiData(false),250);setTimeout(rerenderLoai,700);return r;};
+    n.__pv26Loai=true; window.nav=n;
+  }
+  function boot(){mergeRawIntoPV(cachedData());rerenderLoai();setTimeout(()=>window.pv26LoadLoaiData(false),500);setTimeout(()=>window.pv26LoadLoaiData(true),2200);}
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
+  setTimeout(boot,1200);setTimeout(rerenderLoai,3500);
 })();
 </script>
