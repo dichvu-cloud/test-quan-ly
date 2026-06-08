@@ -324,12 +324,32 @@ pvBDSCRenderForm = function(){
 
 const pv16OldAddFixed = typeof pvBDSCAddFixed==='function' ? pvBDSCAddFixed : null;
 pvBDSCAddFixed = function(){
-  (PV.data.vatTuCoDinh||[]).filter(pvTenVatTu).forEach(x=>{const id=pvMatId(x);if(!PV.data.selected.find(i=>i.id===id))PV.data.selected.push({id,tenVatTu:pvTenVatTu(x),cumLinhKien:pvCum(x),maVatTu:pvGetObj(x,['Mã vật tư','Ma vat tu'])||'',donViTinh:pvGetObj(x,['ĐVT','Đơn vị tính','DVT'])||'',soLuongCan:1,tinhTrangXuatKho:'Mới',nguonVatTu:'Cố định',fixed:true,included:true,loaiDong:'Chuẩn bị'});});
+  (PV.data.vatTuCoDinh||[]).filter(pvTenVatTu).forEach(x=>{
+    const id=pvMatId(x);
+    if(!PV.data.selected.find(i=>i.id===id)){
+      const lk=pvTenVatTu(x);
+      // Lấy cum từ dữ liệu, fallback tìm qua PARTS_MAP nếu rỗng
+      const cum=pvCum(x)||(typeof pvFindCumForLK==='function'?pvFindCumForLK(lk):'');
+      PV.data.selected.push({id,tenVatTu:lk,cumLinhKien:cum,maVatTu:pvGetObj(x,['Mã vật tư','Ma vat tu'])||'',donViTinh:pvGetObj(x,['ĐVT','Đơn vị tính','DVT'])||'',soLuongCan:1,tinhTrangXuatKho:'Mới',nguonVatTu:'Cố định',fixed:true,included:true,loaiDong:'Chuẩn bị'});
+    }
+  });
 };
 function pv16ToggleInclude(id,checked){const it=PV.data.selected.find(x=>x.id===id);if(!it)return;if(it.fixed){it.included=checked;}else if(!checked){PV.data.selected=PV.data.selected.filter(x=>x.id!==id);}pvBDSCRenderVatTuSearch();pvBDSCRenderSelected();}
 const pv16OldSelectMaterial=typeof pvBDSCSelectMaterial==='function'?pvBDSCSelectMaterial:null;
-pvBDSCSelectMaterial=function(id,checked){if(!checked)return;const x=(PV.data.vatTu||[]).find(v=>pvMatId(v)===id);if(!x)return;const qEl=document.getElementById('pvb_qty_'+pvCss(id));const sEl=document.getElementById('pvb_st_'+pvCss(id));const qty=qEl?parseFloat(qEl.value)||1:1;const st=sEl?sEl.value:'Mới';if(!PV.data.selected.find(i=>i.id===id))PV.data.selected.push({id,tenVatTu:pvTenVatTu(x),cumLinhKien:pvCum(x),maVatTu:pvGetObj(x,['Mã vật tư','Ma vat tu'])||'',donViTinh:pvGetObj(x,['ĐVT','Đơn vị tính','DVT'])||'',soLuongCan:qty,tinhTrangXuatKho:st,nguonVatTu:'Chọn thêm',fixed:false,included:true,loaiDong:'Chuẩn bị'});pvBDSCRenderVatTuSearch();pvBDSCRenderSelected();}
-pvBDSCRenderSelected=function(){ _pvBDSCRenderSelectedImpl(); }
+pvBDSCSelectMaterial=function(id,checked){
+  if(!checked)return;
+  const x=(PV.data.vatTu||[]).find(v=>pvMatId(v)===id);if(!x)return;
+  const qEl=document.getElementById('pvb_qty_'+pvCss(id));
+  const sEl=document.getElementById('pvb_st_'+pvCss(id));
+  const loaiEl=document.getElementById('v25_loai_'+pvCss(id));
+  const qty=qEl?parseFloat(qEl.value)||1:1;
+  const st=sEl?sEl.value:'Mới';
+  const maLoai=loaiEl?loaiEl.value:'';
+  if(!PV.data.selected.find(i=>i.id===id))PV.data.selected.push({id,tenVatTu:pvTenVatTu(x),cumLinhKien:pvCum(x),maVatTu:pvGetObj(x,['Mã vật tư','Ma vat tu'])||'',donViTinh:pvGetObj(x,['ĐVT','Đơn vị tính','DVT'])||'',soLuongCan:qty,tinhTrangXuatKho:st,maLoai:maLoai,nguonVatTu:'Chọn thêm',fixed:false,included:true,loaiDong:'Chuẩn bị'});
+  pvBDSCRenderVatTuSearch();pvBDSCRenderSelected();
+}
+// Dùng wrapper function thay vì gán trực tiếp để _pvBDSCRenderSelectedImpl luôn được resolve lúc runtime
+pvBDSCRenderSelected=function(){ if(typeof _pvBDSCRenderSelectedImpl==='function') _pvBDSCRenderSelectedImpl(); }
 pvBDSCRemoveMat=function(id){PV.data.selected=PV.data.selected.filter(x=>x.id!==id);pvBDSCRenderVatTuSearch();pvBDSCRenderSelected();}
 
 pvBDSCPayload=function(){const md=(document.querySelector('input[name="pvb_mucDich"]:checked')||{}).value||'Bảo dưỡng sửa chữa';const ms=pv16MachineSummary();return {doiTruong:pvBDSCGetVal('pvb_doiTruong'),thanhVien:_pvbTVSelected.slice(),maMay:ms.maMay,tenTrai:ms.tenTrai,donVi:ms.donVi,khuVuc:ms.khuVuc,tinhTP:ms.tinhTP,machines:ms.list,danhSachMaMay:ms.danhSachMaMay,danhSachTenTrai:ms.danhSachTenTrai,ngayGioXuatKho:pvBDSCFmtDT(pvBDSCGetVal('pvb_ngayGioXuatKho')),nguoiXuatKho:pvBDSCGetVal('pvb_nguoiXuatKho'),ngayGioNhapKho:pvBDSCFmtDT(pvBDSCGetVal('pvb_ngayGioNhapKho')),nguoiNhapKho:pvBDSCGetVal('pvb_nguoiNhapKho'),mucDich:md,cuThe:md==='Bảo dưỡng sửa chữa'?(PV.hienTuongSel.join('; ')||'-'):(pvBDSCGetVal('pvb_cuTheNhapTay')||'-'),ghiChu:'',items:(PV.data.selected||[]).filter(x=>x.included!==false).map((x,i)=>({stt:i+1,nguonVatTu:x.nguonVatTu,cumLinhKien:x.cumLinhKien,tenVatTu:x.tenVatTu,maVatTu:x.maVatTu,donViTinh:x.donViTinh,soLuongCan:x.soLuongCan,tinhTrangXuatKho:x.tinhTrangXuatKho,loaiDong:x.loaiDong||'Chuẩn bị',included:true}))};}
@@ -6847,7 +6867,7 @@ function _pvBDSCRenderSelectedImpl() {
   }).join('');
 }
 
-function pvBDSCRenderSelected() { _pvBDSCRenderSelectedImpl(); }
+// pvBDSCRenderSelected đã được gán ở block V16 (dùng lazy wrapper → _pvBDSCRenderSelectedImpl)
 
 // Hàm lưu maLoai vào selected item và re-render
 function pvBDSCUpdLoai(id, val) {
@@ -7691,17 +7711,20 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape')['ov-part','ov-view'
     }
   };
 
-  /* Override pvBDSCAddFixed to include loaiDong field */
+  /* Override pvBDSCAddFixed to include loaiDong field + cum fallback */
   const _oldAF = typeof pvBDSCAddFixed==='function'?pvBDSCAddFixed:null;
   window.pvBDSCAddFixed = function(){
     (PV.data.vatTuCoDinh||[]).filter(pvTenVatTu).forEach(x=>{
       const id=pvMatId(x);
-      if(!PV.data.selected.find(i=>i.id===id))
-        PV.data.selected.push({id,tenVatTu:pvTenVatTu(x),cumLinhKien:pvCum(x),
+      if(!PV.data.selected.find(i=>i.id===id)){
+        const lk=pvTenVatTu(x);
+        const cum=pvCum(x)||(typeof pvFindCumForLK==='function'?pvFindCumForLK(lk):'');
+        PV.data.selected.push({id,tenVatTu:lk,cumLinhKien:cum,
           maVatTu:pvGetObj(x,['Mã vật tư','Ma vat tu'])||'',
           donViTinh:pvGetObj(x,['ĐVT','Đơn vị tính','DVT'])||'',
           soLuongCan:1,tinhTrangXuatKho:'Mới',maLoai:'',
           nguonVatTu:'Cố định',fixed:true,included:true,loaiDong:'Chuẩn bị'});
+      }
     });
   };
 })();
