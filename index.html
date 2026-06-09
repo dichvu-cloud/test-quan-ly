@@ -762,6 +762,9 @@ tbody tr{border-bottom:1px solid #f1f5f9;transition:.1s}tbody tr:hover{backgroun
     <div class="nitem" onclick="nav('analysis')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>Phân tích
     </div>
+    <div class="nitem" onclick="nav('lifecycle')" id="ni-lifecycle">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><polyline points="12 6 12 12 16 14"/></svg>Vòng đời vật tư<span class="nbadge rd" id="nb-lifecycle" style="display:none">0</span>
+    </div>
     <div class="nsec">Danh mục</div>
     <div class="nitem" onclick="nav('machines')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3h-8M12 3v4"/></svg>Danh sách máy<span class="nbadge" id="nb-mach">0</span>
@@ -855,6 +858,11 @@ tbody tr{border-bottom:1px solid #f1f5f9;transition:.1s}tbody tr:hover{backgroun
           <div class="iw"><div class="il">Khu vực</div><input class="inp" id="rf-kv" readonly placeholder="Tự động..."></div>
           <div class="iw"><div class="il">Tỉnh / Thành phố</div><input class="inp" id="rf-tinh" readonly placeholder="Tự động..."></div>
           <div class="iw"><div class="il">Trạng thái máy</div><input class="inp" id="rf-ts" readonly placeholder="Tự động..."></div>
+          <div class="iw"><div class="il">⏱ Số giờ đồng hồ máy *</div>
+            <input class="inp" id="rf-soGioVanHanh" type="number" min="0" step="0.5" placeholder="VD: 12500 (giờ tổng từ khi lắp máy)"
+              oninput="onSoGioVanHanhInput(this)">
+            <div class="ih">Tổng số giờ máy đã chạy từ khi lắp đặt đến thời điểm BDSC này (đọc từ đồng hồ máy). Hệ thống dùng để tính tuổi thọ linh kiện = giờ lần này − giờ lần BDSC trước.</div>
+          </div>
         </div>
       </div>
       <div class="fsec">
@@ -1130,6 +1138,87 @@ tbody tr{border-bottom:1px solid #f1f5f9;transition:.1s}tbody tr:hover{backgroun
         <div style="padding:12px 14px;display:flex;flex-wrap:wrap;gap:6px;margin-bottom:4px" id="an-ht-cum-cloud"></div>
       </div>
 
+    </div>
+
+
+    <!-- VÒNG ĐỜI VẬT TƯ -->
+    <div class="page" id="pg-lifecycle">
+      <div class="ph">
+        <h1>&#x23F3; Vòng đời &amp; Định mức thay thế vật tư</h1>
+        <p>Định mức tự tính từ dữ liệu thực tế BDSC · Số giờ vận hành tích lũy · Cảnh báo thay thế · Không dùng bảng cứng</p>
+      </div>
+      <div class="fbar" style="margin-bottom:13px">
+        <input class="inp" id="lc-mm" style="width:180px;font-size:11px" placeholder="&#x1F50D; Lọc mã máy..." autocomplete="off" oninput="renderLifecycle()">
+        <input class="inp" id="lc-vt" style="width:180px;font-size:11px" placeholder="&#x1F50D; Lọc tên vật tư..." autocomplete="off" oninput="renderLifecycle()">
+        <div class="prbtn on" id="lc-sort-btn-freq" onclick="lcSetSort('freq',this)">&#x1F4CA; Tần suất cao nhất</div>
+        <div class="prbtn" id="lc-sort-btn-warn" onclick="lcSetSort('warn',this)">&#x26A0;&#xFE0F; Cần chú ý trước</div>
+        <div class="prbtn" id="lc-sort-btn-avg" onclick="lcSetSort('avg',this)">&#x23F1; TB giờ/lần thấp nhất</div>
+        <div class="prbtn" id="lc-sort-btn-name" onclick="lcSetSort('name',this)">&#x1F524; Tên A→Z</div>
+        <div style="margin-left:auto;display:flex;gap:6px">
+          <button class="btn bg-b sm" onclick="pullSheet5().then(()=>renderLifecycle())">&#x1F504; Tải dữ liệu mới</button>
+          <button class="btn bg-g sm" onclick="lcExportXLSX()">&#x1F4E5; Xuất Excel</button>
+        </div>
+      </div>
+      <div id="lc-data-note" style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:9px;padding:10px 14px;margin-bottom:13px;font-size:11px;color:#1e40af">
+        &#x2139;&#xFE0F; <strong>Cách tính định mức:</strong> Trung bình khoảng cách giờ giữa các lần thay thế của cùng 1 vật tư. Cần ít nhất 2 lần thay có ghi số giờ VH mới tính được định mức. Vật tư chưa đủ dữ liệu sẽ hiển thị &quot;—&quot;.
+      </div>
+      <div id="lc-kpi" style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:13px;margin-bottom:14px">
+        <div class="cc">
+          <div class="ct" style="margin-bottom:8px">&#x1F4CA; Top 10 vật tư thay nhiều nhất (lần)</div>
+          <div style="position:relative;height:250px"><canvas id="lc-chart-freq"></canvas></div>
+        </div>
+        <div class="cc">
+          <div class="ct" style="margin-bottom:8px">&#x23F1; Top 10 định mức ngắn nhất (TB giờ/lần)</div>
+          <div style="position:relative;height:250px"><canvas id="lc-chart-avg"></canvas></div>
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:14px">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+          <div style="font-size:12px;font-weight:700">&#x1F4C8; Xu hướng thay thế theo tháng (12 tháng gần nhất)</div>
+          <select id="lc-trend-vt" class="sel" style="font-size:11px;padding:4px 9px;width:auto;max-width:260px" onchange="renderLifecycleTrendChart()">
+            <option value="">— Tất cả vật tư —</option>
+          </select>
+        </div>
+        <div style="position:relative;height:200px"><canvas id="lc-chart-trend"></canvas></div>
+      </div>
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+          <div style="font-size:12px;font-weight:700">&#x1F4CB; Bảng định mức chi tiết toàn bộ vật tư</div>
+          <div id="lc-count" style="font-size:11px;color:var(--mu)"></div>
+        </div>
+        <div style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:1000px">
+            <thead>
+              <tr style="background:#fff7ed;border-bottom:2px solid #fde68a">
+                <th style="padding:8px 10px;text-align:left;font-size:9px;font-weight:700;color:#92400e;text-transform:uppercase">#</th>
+                <th style="padding:8px 10px;text-align:left;font-size:9px;font-weight:700;color:#92400e;text-transform:uppercase">Tên vật tư / linh kiện</th>
+                <th style="padding:8px 10px;text-align:center;font-size:9px;font-weight:700;color:#92400e;text-transform:uppercase">Tổng lần thay</th>
+                <th style="padding:8px 10px;text-align:center;font-size:9px;font-weight:700;color:#92400e;text-transform:uppercase">Số máy</th>
+                <th style="padding:8px 10px;text-align:center;font-size:9px;font-weight:700;color:#92400e;text-transform:uppercase">Định mức TB (giờ/lần)</th>
+                <th style="padding:8px 10px;text-align:center;font-size:9px;font-weight:700;color:#92400e;text-transform:uppercase">Độ ổn định (CV%)</th>
+                <th style="padding:8px 10px;text-align:center;font-size:9px;font-weight:700;color:#92400e;text-transform:uppercase">Lần thay gần nhất</th>
+                <th style="padding:8px 10px;text-align:center;font-size:9px;font-weight:700;color:#92400e;text-transform:uppercase">Giờ VH lần cuối</th>
+                <th style="padding:8px 10px;text-align:center;font-size:9px;font-weight:700;color:#92400e;text-transform:uppercase">Giờ VH hiện tại</th>
+                <th style="padding:8px 10px;text-align:center;font-size:9px;font-weight:700;color:#92400e;text-transform:uppercase">Đã dùng sau thay</th>
+                <th style="padding:8px 10px;text-align:center;font-size:9px;font-weight:700;color:#92400e;text-transform:uppercase">% Vòng đời</th>
+                <th style="padding:8px 10px;text-align:left;font-size:9px;font-weight:700;color:#92400e;text-transform:uppercase">Trạng thái</th>
+              </tr>
+            </thead>
+            <tbody id="lc-tbody">
+              <tr><td colspan="12" style="padding:30px;text-align:center;color:var(--mu)">Nhấn &#x1F504; Tải dữ liệu mới để bắt đầu phân tích.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div style="margin-top:12px;padding:10px 14px;background:#f8fafc;border-radius:8px;font-size:10px;color:var(--mu);line-height:1.7">
+        <strong>Giải thích cách tính:</strong>
+        &#x2022; <strong>Định mức TB (giờ/lần)</strong>: Với mỗi lần thay vật tư, <em>tuổi thọ lần đó</em> = Giờ đồng hồ máy khi thay − Giờ đồng hồ máy lần BC ngay trước (cùng mã máy). Định mức = trung bình tất cả mẫu tuổi thọ thu thập được.
+        &#x2022; <strong>Số giờ đồng hồ máy</strong>: KTV nhập khi tạo báo cáo BDSC — tổng giờ máy chạy từ khi lắp đặt đến thời điểm BDSC (đọc từ đồng hồ vận hành trên máy).
+        &#x2022; <strong>Độ ổn định (CV%)</strong>: Hệ số biến động = Độ lệch chuẩn ÷ Trung bình × 100. Ổn định &lt;20%, Trung bình 20–50%, Cao &gt;50%.
+        &#x2022; <strong>% Vòng đời</strong>: (Giờ đồng hồ mới nhất của máy − Giờ đồng hồ lần thay cuối) ÷ Định mức TB × 100.
+        &#x2022; Vật tư chưa có đủ cặp BC liên tiếp của cùng máy có ghi giờ: Không tính được định mức, hiển thị "—".
+      </div>
     </div>
 
     <!-- DANH SÁCH MÁY (Sheet 2) -->
@@ -2010,6 +2099,9 @@ function nav(p){
   const map={dash:0,newrep:1,replist:2,watch:3,analysis:4,machines:5,phenom:6,members:7,users:8,perms:9,settings:10};
   const ni=document.querySelectorAll('.nitem');
   if(map[p]!==undefined&&ni[map[p]])ni[map[p]].classList.add('on');
+  // ID-based highlight for newer pages
+  const niById = document.getElementById('ni-'+p);
+  if(niById) niById.classList.add('on');
   if(p==='dash')    { renderDash(); updateBadges(); }
   if(p==='analysis'){
     function _doRenderAnalysis(){
@@ -2038,6 +2130,11 @@ function nav(p){
   if(p==='machines'){ renderMachines(); }
   if(p==='taoPhieu'){ pvBDSCInit('form'); }
   if(p==='danhSachPhieu'){ pvBDSCInit('history'); }
+  if(p==='lifecycle'){
+    setTimeout(()=>{
+      if(typeof renderLifecycle==='function') renderLifecycle();
+    }, 80);
+  }
 }
 
 function renderAll(){
@@ -2069,6 +2166,13 @@ function updateBadges(){
   const ktvEl=document.getElementById('nb-ktv');
   if(ktvEl)ktvEl.textContent=USERS.filter(u=>u.role!=='admin').length;
   document.getElementById('nb-perms').textContent=PERM_REQS.length;
+  // Lifecycle badge: cảnh báo vật tư quá hạn/sắp đến hạn
+  try {
+    if(typeof buildLifecycleData==='function' && REPORTS.filter(r=>r.status!=='draft').length>0){
+      const lcData = buildLifecycleData();
+      updateLifecycleBadge(lcData);
+    }
+  } catch(e){}
 }
 
 // ═══ DASHBOARD ═══
@@ -2729,6 +2833,7 @@ function collectReport(){
     nkt:document.getElementById('rf-nkt')?.value||'',
     gkt:document.getElementById('rf-gkt')?.value||'',
     tg:document.getElementById('rf-tg')?.value||'',
+    soGioVanHanh:parseFloat(document.getElementById('rf-soGioVanHanh')?.value||'0')||0,
     phen,cl:curConclusion,gc:document.getElementById('rf-gc')?.value||'',
     status:'submitted',cat:new Date().toISOString()
   };
@@ -4298,6 +4403,436 @@ function showLKDrillDown(lkName, totalSL, totalCnt, list){
   modal.addEventListener('click',e=>{if(e.target===modal)modal.remove();});
 }
 
+// ═══════════════════════════════════════════════════════════════
+// VÒNG ĐỜI VẬT TƯ — Tính định mức 100% từ dữ liệu thực
+// Không dùng bảng cứng. Định mức = TB khoảng cách giờ VH giữa 2 lần thay
+// ═══════════════════════════════════════════════════════════════
+
+let _lcSort = 'freq';  // freq | warn | avg | name
+
+function lcSetSort(s, el) {
+  _lcSort = s;
+  document.querySelectorAll('#pg-lifecycle .prbtn').forEach(b => b.classList.remove('on'));
+  if (el) el.classList.add('on');
+  renderLifecycle();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// LOGIC TÍNH VÒNG ĐỜI VẬT TƯ — ĐÚNG THEO YÊU CẦU:
+//
+// soGioVanHanh = tổng giờ đồng hồ máy tính từ khi lắp đặt đến thời điểm BC
+//
+// Tuổi thọ linh kiện X trên máy M tại lần thay thứ k:
+//   = gio_BC_thay(k) - gio_BC_truoc_do_cung_may_M
+//   (BC trước đó = BC gần nhất trước BC thay, của CÙNG MÃ MÁY)
+//
+// Nếu không có BC trước đó (lần thay đầu tiên trên máy):
+//   = gio_BC_thay(k) - 0  → dùng như giờ vận hành từ đầu đến khi hỏng lần đầu
+//   (chỉ dùng khi có ít nhất 1 mẫu khác để đối chiếu)
+//
+// Định mức TB = trung bình tất cả tuổi thọ thu thập được trên mọi máy
+// ═══════════════════════════════════════════════════════════════
+
+// Build the core data structure from REPORTS
+function buildLifecycleData() {
+  const list = REPORTS.filter(r => r.status !== 'draft');
+  if (!list.length) return [];
+
+  // ── Bước 1: Xây bảng lịch sử báo cáo theo từng mã máy, sắp xếp theo ngày ──
+  // machineTimeline[maMay] = [{date, gio, repId}] đã sort tăng dần theo ngày/gio
+  const machineTimeline = {};
+  list.forEach(r => {
+    const mm = r.maMay || '__unknown__';
+    if (!machineTimeline[mm]) machineTimeline[mm] = [];
+    machineTimeline[mm].push({
+      date: r.nd || r.cat || '',
+      gio: parseFloat(r.soGioVanHanh) || 0,
+      repId: r.id,
+      rep: r
+    });
+  });
+  // Sort mỗi máy theo ngày tăng dần, tie-break theo gio tăng dần
+  Object.values(machineTimeline).forEach(arr => {
+    arr.sort((a, b) => {
+      const da = parseVNDate(a.date) || new Date(0);
+      const db = parseVNDate(b.date) || new Date(0);
+      if (da.getTime() !== db.getTime()) return da - db;
+      return a.gio - b.gio;
+    });
+  });
+
+  // Hàm: với mã máy + BC hiện tại, tìm gio của BC trước đó trên cùng máy
+  function getPrevGio(maMay, curRepId) {
+    const timeline = machineTimeline[maMay || '__unknown__'] || [];
+    const idx = timeline.findIndex(t => t.repId === curRepId);
+    if (idx <= 0) return null; // không có BC trước
+    // Tìm BC trước đó gần nhất có gio > 0
+    for (let i = idx - 1; i >= 0; i--) {
+      if (timeline[i].gio > 0) return timeline[i].gio;
+    }
+    return null;
+  }
+
+  // Lấy giờ đồng hồ MỚI NHẤT của từng máy (proxy "giờ hiện tại")
+  const latestGioByMachine = {};
+  Object.entries(machineTimeline).forEach(([mm, arr]) => {
+    const maxG = Math.max(...arr.map(t => t.gio).filter(g => g > 0), 0);
+    latestGioByMachine[mm] = maxG;
+  });
+
+  // ── Bước 2: Thu thập sự kiện thay thế và tính tuổi thọ từng lần ──
+  const byPart = {};
+
+  list.forEach(r => {
+    const curGio = parseFloat(r.soGioVanHanh) || 0;
+    const maMay = r.maMay || '__unknown__';
+    const prevGio = getPrevGio(maMay, r.id);
+
+    (r.phen || []).forEach(p => {
+      Object.entries(p.parts || {}).forEach(([lk, v]) => {
+        const loai = typeof v === 'object' ? (v.loai || '') : String(v || '');
+        if (!loai.toLowerCase().includes('thay')) return;
+        const sl = typeof v === 'object' ? (parseInt(v.sl) || 1) : 1;
+        const key = lk.trim();
+        if (!key) return;
+        if (!byPart[key]) {
+          byPart[key] = { name: key, events: [], machines: new Set() };
+        }
+
+        // Tính tuổi thọ của linh kiện trong lần thay này:
+        // = gio_bc_hien_tai - gio_bc_truoc_do (cùng mã máy)
+        let lifeHours = null;
+        if (curGio > 0 && prevGio !== null && curGio > prevGio) {
+          lifeHours = curGio - prevGio;
+        } else if (curGio > 0 && prevGio === null) {
+          // Lần thay đầu tiên: dùng chính curGio (giờ từ đầu đến khi thay lần 1)
+          // Đánh dấu là "first_replace" để có thể filter riêng nếu cần
+          lifeHours = curGio; // sẽ xử lý sau trong phân tích
+        }
+
+        byPart[key].events.push({
+          date: r.nd || r.cat,
+          gio: curGio,
+          prevGio: prevGio,
+          lifeHours: lifeHours,
+          isFirstReplace: (prevGio === null),
+          maMay: maMay,
+          repId: r.id,
+          sl
+        });
+        byPart[key].machines.add(maMay);
+      });
+    });
+  });
+
+  // ── Bước 3: Tính định mức cho từng loại vật tư ──
+  return Object.values(byPart).map(p => {
+    const events = [...p.events].sort((a, b) => {
+      const da = parseVNDate(a.date) || new Date(0);
+      const db = parseVNDate(b.date) || new Date(0);
+      return da - db;
+    });
+
+    const totalCount = events.length;
+    const totalSl = events.reduce((a, e) => a + e.sl, 0);
+    const machines = [...p.machines].filter(m => m !== '__unknown__');
+    const lastEvt = events[events.length - 1];
+    const lastDate = lastEvt.date;
+    const lastGio = lastEvt.gio;
+    const lastMaMay = lastEvt.maMay;
+
+    // Tập hợp mẫu tuổi thọ để tính định mức:
+    // Ưu tiên: các lần thay KHÔNG phải lần đầu tiên (prevGio known)
+    // Nếu không đủ mẫu: bổ sung cả lần đầu tiên
+    const nonFirstSamples = events.filter(e => !e.isFirstReplace && e.lifeHours !== null && e.lifeHours > 0);
+    const allSamples = events.filter(e => e.lifeHours !== null && e.lifeHours > 0);
+    const samples = nonFirstSamples.length >= 1 ? nonFirstSamples : allSamples;
+
+    let avgGio = null, stdGio = null, cvPct = null;
+    if (samples.length >= 1) {
+      const lifes = samples.map(e => e.lifeHours);
+      avgGio = Math.round(lifes.reduce((a, b) => a + b, 0) / lifes.length);
+      if (lifes.length >= 2) {
+        const variance = lifes.reduce((a, d) => a + Math.pow(d - avgGio, 2), 0) / lifes.length;
+        stdGio = Math.round(Math.sqrt(variance));
+        cvPct = avgGio > 0 ? Math.round(stdGio / avgGio * 100) : null;
+      }
+    }
+
+    // Giờ đã dùng kể từ lần thay cuối = latestGio của máy đó - gio lần thay cuối
+    const machLatest = latestGioByMachine[lastMaMay] || 0;
+    let hoursUsed = null;
+    if (lastGio > 0 && machLatest >= lastGio) {
+      hoursUsed = Math.round(machLatest - lastGio);
+    }
+
+    const pct = (avgGio && avgGio > 0 && hoursUsed !== null)
+      ? Math.round(hoursUsed / avgGio * 100) : null;
+
+    // Warning level
+    let warnLevel = 0;
+    let warnMsg = '✅ Trong định mức';
+    if (pct !== null) {
+      if (pct >= 100) { warnLevel = 2; warnMsg = '⛔ QUÁ HẠN — Cần thay ngay'; }
+      else if (pct >= 80) { warnLevel = 1; warnMsg = '⚠️ Sắp đến hạn (>80%)'; }
+    } else if (avgGio === null) {
+      warnMsg = '— Chưa đủ dữ liệu';
+    }
+    if (warnLevel === 0 && cvPct !== null && cvPct > 50) {
+      warnMsg = '⚠️ Tuổi thọ không ổn định';
+      warnLevel = 1;
+    }
+
+    return {
+      name: p.name,
+      totalCount,
+      totalSl,
+      machines,
+      machineCount: machines.length,
+      events,
+      samples,
+      sampleCount: samples.length,
+      lastDate,
+      lastGio,
+      lastMaMay,
+      avgGio,
+      stdGio,
+      cvPct,
+      hoursUsed,
+      machLatest,
+      pct,
+      warnLevel,
+      warnMsg
+    };
+  });
+}
+
+function renderLifecycle() {
+  const data = buildLifecycleData();
+  const lcMm = (document.getElementById('lc-mm') || {}).value || '';
+  const lcVt = (document.getElementById('lc-vt') || {}).value || '';
+  const normStr = s => String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/đ/g,'d');
+
+  let filtered = data.filter(d => {
+    if (lcVt && !normStr(d.name).includes(normStr(lcVt))) return false;
+    if (lcMm && !d.machines.some(m => normStr(m).includes(normStr(lcMm)))) return false;
+    return true;
+  });
+
+  // Sort
+  if (_lcSort === 'freq') filtered.sort((a, b) => b.totalCount - a.totalCount);
+  else if (_lcSort === 'warn') filtered.sort((a, b) => b.warnLevel - a.warnLevel || (b.pct||0) - (a.pct||0));
+  else if (_lcSort === 'avg') filtered.sort((a, b) => {
+    if (a.avgGio === null && b.avgGio === null) return 0;
+    if (a.avgGio === null) return 1;
+    if (b.avgGio === null) return -1;
+    return a.avgGio - b.avgGio;
+  });
+  else filtered.sort((a, b) => normStr(a.name).localeCompare(normStr(b.name)));
+
+  // KPI
+  const kpiEl = document.getElementById('lc-kpi');
+  if (kpiEl) {
+    const total = data.length;
+    const withDef = data.filter(d => d.avgGio !== null).length;
+    const critical = data.filter(d => d.warnLevel === 2).length;
+    const warn = data.filter(d => d.warnLevel === 1).length;
+    const ok = data.filter(d => d.warnLevel === 0 && d.avgGio !== null).length;
+    kpiEl.innerHTML = [
+      { label: 'Tổng loại vật tư', val: total, color: '#0d6e3f', bg: '#f0fdf4', border: '#bbf7d0' },
+      { label: '✅ Đã có định mức', val: withDef, color: '#16a34a', bg: '#f0fdf4', border: '#86efac' },
+      { label: '⛔ Quá hạn thay', val: critical, color: '#dc2626', bg: '#fef2f2', border: '#fca5a5' },
+      { label: '⚠️ Sắp đến hạn', val: warn, color: '#d97706', bg: '#fffbeb', border: '#fde68a' },
+      { label: '🕒 Chưa đủ dữ liệu', val: total - withDef, color: '#94a3b8', bg: '#f8fafc', border: '#e2e8f0' },
+    ].map(({ label, val, color, bg, border }) => `
+      <div style="background:${bg};border:1.5px solid ${border};border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:26px;font-weight:800;color:${color}">${val}</div>
+        <div style="font-size:10px;font-weight:600;color:${color};margin-top:2px">${label}</div>
+      </div>`).join('');
+  }
+
+  // Count label
+  const countEl = document.getElementById('lc-count');
+  if (countEl) countEl.textContent = `${filtered.length}/${data.length} vật tư`;
+
+  // Table
+  renderLifecycleTable(filtered);
+
+  // Charts
+  renderLifecycleFreqChart(data);
+  renderLifecycleAvgChart(data);
+  renderLifecycleTrendChart();
+  updateLifecycleBadge(data);
+
+  // Populate trend selector
+  const sel = document.getElementById('lc-trend-vt');
+  if (sel && sel.options.length <= 1) {
+    data.sort((a,b)=>b.totalCount-a.totalCount).slice(0,30).forEach(d => {
+      const o = document.createElement('option');
+      o.value = d.name; o.textContent = d.name;
+      sel.appendChild(o);
+    });
+  }
+}
+
+function renderLifecycleTable(rows) {
+  const tbody = document.getElementById('lc-tbody');
+  if (!tbody) return;
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="12" style="padding:30px;text-align:center;color:var(--mu)">Không có dữ liệu phù hợp.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map((d, idx) => {
+    const barColor = d.warnLevel === 2 ? '#dc2626' : d.warnLevel === 1 ? '#d97706' : '#16a34a';
+    const badgeCls = d.warnLevel === 2 ? 'br' : d.warnLevel === 1 ? 'ba' : 'bg';
+    const pctBar = d.pct !== null ? `
+      <div style="font-size:10px;font-weight:700;color:${barColor};margin-bottom:2px">${d.pct}%</div>
+      <div style="height:5px;background:#f1f5f9;border-radius:99px;overflow:hidden;width:70px">
+        <div style="width:${Math.min(d.pct,100)}%;height:100%;background:${barColor};border-radius:99px"></div>
+      </div>` : '<span style="color:var(--mu);font-size:10px">—</span>';
+    const cvBadge = d.cvPct !== null
+      ? `<span class="b ${d.cvPct < 20 ? 'bg' : d.cvPct < 50 ? 'ba' : 'br'}" style="font-size:9px">${d.cvPct}%</span>`
+      : '<span style="color:var(--mu);font-size:10px">—</span>';
+    const defLabel = d.avgGio !== null
+      ? `<span style="font-size:9px;color:var(--mu);font-family:var(--font)">(${d.sampleCount} mẫu)</span>`
+      : `<span style="font-size:9px;color:#94a3b8">Chưa đủ dữ liệu</span>`;
+    return `<tr style="border-bottom:1px solid #f1f5f9" onmouseover="this.style.background='#fafafa'" onmouseout="this.style.background=''">
+      <td style="padding:7px 10px;color:var(--mu);font-size:10px">${idx + 1}</td>
+      <td style="padding:7px 10px;font-size:12px;font-weight:600;max-width:200px">${d.name}</td>
+      <td style="padding:7px 10px;text-align:center"><span class="b bmu">${d.totalCount}</span><div style="font-size:9px;color:var(--mu)">${d.totalSl} cái</div></td>
+      <td style="padding:7px 10px;text-align:center"><span class="b bb" style="font-size:10px">${d.machineCount}</span></td>
+      <td style="padding:7px 10px;text-align:center;font-family:var(--mono);font-size:12px;font-weight:700;color:${d.avgGio ? '#0d6e3f' : '#94a3b8'}">${d.avgGio !== null ? d.avgGio + 'h' : '—'}<div>${defLabel}</div></td>
+      <td style="padding:7px 10px;text-align:center">${cvBadge}</td>
+      <td style="padding:7px 10px;text-align:center;font-size:11px">${d.lastDate || '—'}<div style="font-size:9px;color:var(--mu)">${d.lastMaMay !== '__unknown__' ? d.lastMaMay : '—'}</div></td>
+      <td style="padding:7px 10px;text-align:center;font-size:11px;font-family:var(--mono)">${d.lastGio > 0 ? d.lastGio + 'h' : '—'}</td>
+      <td style="padding:7px 10px;text-align:center;font-size:11px;font-family:var(--mono)">${d.machLatest > 0 ? d.machLatest + 'h' : '—'}</td>
+      <td style="padding:7px 10px;text-align:center;font-size:11px;font-family:var(--mono)">${d.hoursUsed !== null ? d.hoursUsed + 'h' : '—'}</td>
+      <td style="padding:7px 10px;text-align:center">${pctBar}</td>
+      <td style="padding:7px 10px"><span class="b ${badgeCls}" style="font-size:10px;white-space:nowrap">${d.warnMsg}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+function renderLifecycleFreqChart(data) {
+  if (charts['lc-chart-freq']) { charts['lc-chart-freq'].destroy(); charts['lc-chart-freq'] = null; }
+  const cv = document.getElementById('lc-chart-freq'); if (!cv) return;
+  const top = [...data].sort((a, b) => b.totalCount - a.totalCount).slice(0, 10);
+  if (!top.length) return;
+  charts['lc-chart-freq'] = new Chart(cv, {
+    type: 'bar',
+    data: {
+      labels: top.map(d => d.name.length > 26 ? d.name.slice(0, 23) + '…' : d.name),
+      datasets: [{
+        data: top.map(d => d.totalCount),
+        backgroundColor: top.map(d => d.warnLevel === 2 ? 'rgba(220,38,38,.75)' : d.warnLevel === 1 ? 'rgba(217,119,6,.75)' : 'rgba(13,110,63,.72)'),
+        borderRadius: 4
+      }]
+    },
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => `${c.raw} lần thay` } } },
+      scales: { x: { beginAtZero: true, ticks: { font: { size: 9 } } }, y: { ticks: { font: { size: 9 } } } }
+    }
+  });
+}
+
+function renderLifecycleAvgChart(data) {
+  if (charts['lc-chart-avg']) { charts['lc-chart-avg'].destroy(); charts['lc-chart-avg'] = null; }
+  const cv = document.getElementById('lc-chart-avg'); if (!cv) return;
+  const withDef = data.filter(d => d.avgGio !== null);
+  const top = [...withDef].sort((a, b) => a.avgGio - b.avgGio).slice(0, 10);
+  if (!top.length) return;
+  charts['lc-chart-avg'] = new Chart(cv, {
+    type: 'bar',
+    data: {
+      labels: top.map(d => d.name.length > 26 ? d.name.slice(0, 23) + '…' : d.name),
+      datasets: [{
+        data: top.map(d => d.avgGio),
+        backgroundColor: top.map(d => d.avgGio < 500 ? 'rgba(220,38,38,.75)' : d.avgGio < 1500 ? 'rgba(217,119,6,.75)' : 'rgba(37,99,235,.72)'),
+        borderRadius: 4
+      }]
+    },
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => `${c.raw}h (định mức TB)` } } },
+      scales: { x: { beginAtZero: true, ticks: { font: { size: 9 } } }, y: { ticks: { font: { size: 9 } } } }
+    }
+  });
+}
+
+function renderLifecycleTrendChart() {
+  if (charts['lc-chart-trend']) { charts['lc-chart-trend'].destroy(); charts['lc-chart-trend'] = null; }
+  const cv = document.getElementById('lc-chart-trend'); if (!cv) return;
+  const selVt = (document.getElementById('lc-trend-vt') || {}).value || '';
+  const data = buildLifecycleData();
+
+  // Build monthly counts for last 12 months
+  const now = new Date();
+  const months = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push({ key: `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`, label: `T${d.getMonth()+1}/${String(d.getFullYear()).slice(2)}`, count: 0 });
+  }
+
+  const target = selVt ? data.filter(d => d.name === selVt) : data;
+  target.forEach(d => {
+    d.events.forEach(e => {
+      const date = parseVNDate(e.date);
+      if (!date) return;
+      const key = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`;
+      const m = months.find(x => x.key === key);
+      if (m) m.count += e.sl;
+    });
+  });
+
+  charts['lc-chart-trend'] = new Chart(cv, {
+    type: 'line',
+    data: {
+      labels: months.map(m => m.label),
+      datasets: [{
+        label: selVt || 'Tất cả vật tư',
+        data: months.map(m => m.count),
+        borderColor: '#0d6e3f', backgroundColor: 'rgba(13,110,63,.08)',
+        borderWidth: 2, fill: true, tension: 0.3,
+        pointBackgroundColor: '#0d6e3f', pointRadius: 4
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => `${c.raw} lần thay / cái` } } },
+      scales: { y: { beginAtZero: true, ticks: { font: { size: 9 } } }, x: { ticks: { font: { size: 9 } } } }
+    }
+  });
+}
+
+function updateLifecycleBadge(data) {
+  const critical = data.filter(d => d.warnLevel === 2).length;
+  const warn = data.filter(d => d.warnLevel === 1).length;
+  const badge = document.getElementById('nb-lifecycle');
+  if (badge) {
+    const total = critical + warn;
+    badge.textContent = total;
+    badge.style.display = total > 0 ? '' : 'none';
+    badge.style.background = critical > 0 ? '#dc2626' : '#d97706';
+  }
+}
+
+function lcExportXLSX() {
+  const data = buildLifecycleData();
+  if (!data.length) { toast('Chưa có dữ liệu', 'warn'); return; }
+  const rows = [['#', 'Tên vật tư', 'Tổng lần thay', 'Tổng SL (cái)', 'Số máy', 'Định mức TB (giờ/lần)', 'Độ lệch chuẩn (giờ)', 'CV%', 'Lần thay gần nhất', 'Giờ VH lần cuối', 'Giờ VH hiện tại', 'Đã dùng sau thay (giờ)', '% Vòng đời', 'Trạng thái']];
+  data.sort((a,b)=>b.totalCount-a.totalCount).forEach((d,i)=>rows.push([i+1, d.name, d.totalCount, d.totalSl, d.machineCount, d.avgGio||'—', d.stdGio||'—', d.cvPct!=null?d.cvPct+'%':'—', d.lastDate||'—', d.lastGio||'—', d.machLatest||'—', d.hoursUsed!=null?d.hoursUsed:'—', d.pct!=null?d.pct+'%':'—', d.warnMsg]));
+  const d = new Date();
+  exportToXLSX(rows, 'Vòng đời VT', `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}_VongDoiVatTu.xlsx`);
+}
+
+function onSoGioVanHanhInput(inp) {
+  if (!inp) return;
+  const v = parseFloat(inp.value);
+  inp.style.borderColor = v > 0 ? 'var(--g)' : '';
+  inp.style.background = v > 0 ? '#f0fdf4' : '';
+}
+
 // ═══ MACHINES ═══
 function setMF(f,el){machFilter=f;machStatusFilter='';document.querySelectorAll('#pg-machines .fchip').forEach(c=>c.classList.remove('on'));el.classList.add('on');renderMachines();}
 let machStatusFilter='';
@@ -5183,7 +5718,8 @@ async function syncReportGS(rep){
     fmtParts(p),   // col17 Linh Kiện
     p.pp||'',      // col18 PP Xử Lý
     ctxt(rep.cl),  // col19 Kết Luận
-    rep.gc||''     // col20 Ghi Chú
+    rep.gc||'',    // col20 Ghi Chú
+    rep.soGioVanHanh||'' // col21 Số Giờ Vận Hành
   ]);
   const d = await callGoogleAPI('write', {sheet:'5', rows});
   if(d&&d.ok){
@@ -5315,7 +5851,8 @@ async function pullSheet5(){
     gc:    colIdx(['ghi chú','ghi chu'],null),
     linkPdf:  colIdx(['link pdf'],null),
     linkWord: colIdx(['link word'],null),
-    noteExtra: colIdx(['ghi chú bổ sung','ghi chu bo sung','note'],null)
+    noteExtra: colIdx(['ghi chú bổ sung','ghi chu bo sung','note'],null),
+    soGioVanHanh: colIdx(['số giờ vận hành','so gio van hanh','gio van hanh','gio vh'],null)
   };
   // Fallback: nếu header không rõ ràng, dùng vị trí mặc định theo schema cũ (20 col)
   if(C.ktvbc===null) C.ktvbc = C.ktv2!==null ? 9 : 8;
@@ -5412,6 +5949,7 @@ async function pullSheet5(){
         note:C.noteExtra!==null?String(r[C.noteExtra]||'').trim():'',
         linkPdf:C.linkPdf!==null?String(r[C.linkPdf]||'').trim():'',
         linkWord:C.linkWord!==null?String(r[C.linkWord]||'').trim():'',
+        soGioVanHanh:C.soGioVanHanh!==null?parseFloat(String(r[C.soGioVanHanh]||'').trim())||0:0,
         status:'submitted', cat:new Date().toISOString(),
         phen:[]
       };
@@ -7968,7 +8506,94 @@ nav=function(p){
     const list=(_pvBDSCListCache&&_pvBDSCListCache.length?_pvBDSCListCache:(typeof pvBDSCReadListCache_==='function'?pvBDSCReadListCache_():[]))||[];
     const wait=list.filter(r=>!rowDone(r));
     const done=list.filter(r=>rowDone(r));
-    root.innerHTML=`<div class="card"><div class="cb" style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap"><b>Danh s\u00e1ch phi\u1ebfu xu\u1ea5t v\u1eadt t\u01b0 ch\u1edd c\u1eadp nh\u1eadt (${wait.length})</b><button class="btn bg-g sm" onclick="pvBDSCRefreshHistory_(true).then(()=>pv17RenderCompletePage())">\u21bb L\u00e0m m\u1edbi</button></div>${pv17ListRowsHTML(wait,'wait')}</div><div class="card" style="margin-top:14px"><div class="cb"><b>Danh s\u00e1ch phi\u1ebfu \u0111\u00e3 ho\u00e0n th\u00e0nh (${done.length})</b></div>${pv17ListRowsHTML(done,'done')}</div>`;
+    const total=list.length;
+
+    // Tính tần suất tạo phiếu theo ngày (14 ngày gần nhất)
+    const dayMap={};
+    list.forEach(r=>{
+      if(!r.ngayTao) return;
+      let d=String(r.ngayTao||'').trim(), key='';
+      const m1=d.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+      const m2=d.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if(m1) key=`${m1[3]}-${m1[2]}-${m1[1]}`;
+      else if(m2) key=`${m2[1]}-${m2[2]}-${m2[3]}`;
+      if(key) dayMap[key]=(dayMap[key]||0)+1;
+    });
+    const sortedDays=Object.keys(dayMap).sort().slice(-14);
+    const purposeMap={};
+    list.forEach(r=>{const k=r.mucDich||'Không rõ'; purposeMap[k]=(purposeMap[k]||0)+1;});
+
+    root.innerHTML=`
+      <div class="card" style="margin-bottom:14px">
+        <div class="cb" style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap">
+          <b>📊 Tổng quan phiếu xuất vật tư</b>
+          <button class="btn bg-g sm" onclick="pvBDSCRefreshHistory_(true,true).then(()=>pv17RenderCompletePage())">↻ Làm mới</button>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:10px 0 14px">
+          <div style="background:#f0fdf4;border:1.5px solid #bbf7d0;border-radius:10px;padding:12px;text-align:center">
+            <div style="font-size:28px;font-weight:800;color:#0d6e3f">${total}</div>
+            <div style="font-size:10px;font-weight:600;color:#0d6e3f;margin-top:2px">Tổng phiếu</div>
+          </div>
+          <div style="background:#fffbeb;border:1.5px solid #fde68a;border-radius:10px;padding:12px;text-align:center">
+            <div style="font-size:28px;font-weight:800;color:#d97706">${wait.length}</div>
+            <div style="font-size:10px;font-weight:600;color:#d97706;margin-top:2px">Chờ hoàn thành</div>
+          </div>
+          <div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;padding:12px;text-align:center">
+            <div style="font-size:28px;font-weight:800;color:#16a34a">${done.length}</div>
+            <div style="font-size:10px;font-weight:600;color:#16a34a;margin-top:2px">Đã hoàn thành</div>
+          </div>
+          <div style="background:#eff6ff;border:1.5px solid #bfdbfe;border-radius:10px;padding:12px;text-align:center">
+            <div style="font-size:28px;font-weight:800;color:#2563eb">${total>0?Math.round(done.length/total*100):0}%</div>
+            <div style="font-size:10px;font-weight:600;color:#2563eb;margin-top:2px">Tỷ lệ hoàn thành</div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+          <div>
+            <div style="font-size:10px;font-weight:700;color:var(--mu);text-transform:uppercase;margin-bottom:8px">📅 Tần suất tạo phiếu (14 ngày gần nhất)</div>
+            <div style="position:relative;height:160px"><canvas id="pv-daily-chart"></canvas></div>
+          </div>
+          <div>
+            <div style="font-size:10px;font-weight:700;color:var(--mu);text-transform:uppercase;margin-bottom:8px">🎯 Phân bổ theo mục đích sử dụng</div>
+            <div style="position:relative;height:160px"><canvas id="pv-purpose-chart"></canvas></div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="cb" style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap">
+          <b>Danh sách phiếu xuất vật tư chờ cập nhật (${wait.length})</b>
+        </div>
+        ${pv17ListRowsHTML(wait,'wait')}
+      </div>
+      <div class="card" style="margin-top:14px">
+        <div class="cb"><b>Danh sách phiếu đã hoàn thành (${done.length})</b></div>
+        ${pv17ListRowsHTML(done,'done')}
+      </div>`;
+
+    setTimeout(()=>{
+      try{
+        const cvD=document.getElementById('pv-daily-chart');
+        if(cvD && sortedDays.length){
+          new Chart(cvD,{type:'bar',data:{
+            labels:sortedDays.map(d=>{const p=d.split('-');return p[2]+'/'+p[1];}),
+            datasets:[{data:sortedDays.map(d=>dayMap[d]||0),backgroundColor:'rgba(13,110,63,.72)',borderRadius:3}]
+          },options:{responsive:true,maintainAspectRatio:false,
+            plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${c.raw} phiếu`}}},
+            scales:{y:{beginAtZero:true,ticks:{font:{size:9},stepSize:1}},x:{ticks:{font:{size:9}}}}}});
+        }
+        const cvP=document.getElementById('pv-purpose-chart');
+        const pe=Object.entries(purposeMap).sort((a,b)=>b[1]-a[1]);
+        if(cvP && pe.length){
+          new Chart(cvP,{type:'doughnut',data:{
+            labels:pe.map(([k])=>k),
+            datasets:[{data:pe.map(([,v])=>v),
+              backgroundColor:['rgba(13,110,63,.75)','rgba(37,99,235,.75)','rgba(217,119,6,.75)','rgba(220,38,38,.75)','rgba(124,58,237,.75)'],
+              borderWidth:1}]
+          },options:{responsive:true,maintainAspectRatio:false,
+            plugins:{legend:{display:true,position:'right',labels:{font:{size:9},boxWidth:12}},
+              tooltip:{callbacks:{label:c=>`${c.label}: ${c.raw} phiếu`}}}}});
+        }
+      }catch(e){console.warn('[pv chart]',e);}
+    },80);
     pv19UpdateSidebarBadge();
   };
   window.pv17RenderCompleteForm=function(root,phieu,items){
@@ -9735,6 +10360,261 @@ nav=function(p){
     }).filter(function(x){return String(x.tenVatTuGoc||x.tenVatTu||'').trim();});
   };
   window.pv16CollectCompleteItems=window.pv17CollectCompleteItems;
+})();
+</script>
+
+<!-- V31 hotfix: khoa du lieu goc tu phieu xuat khi hoan thanh phieu vat tu -->
+<style id="pv31-complete-lock-export-style">
+  .pv31-locked-cell{display:flex;flex-direction:column;gap:4px;min-width:230px}
+  .pv31-locked-name{font-weight:700;color:var(--s);line-height:1.35}
+  .pv31-lock-note{font-size:10px;color:var(--mu)}
+  .pv31-code-pill{display:inline-flex;align-items:center;width:max-content;max-width:100%;padding:2px 7px;border-radius:999px;background:#f1f5f9;color:#475569;border:1px solid var(--bd);font-size:10px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pv31-lock-badge{display:inline-flex;align-items:center;justify-content:center;padding:3px 8px;border-radius:999px;background:#e8f7f0;color:#0d6e3f;border:1px solid #a7f3d0;font-size:10px;font-weight:800;white-space:nowrap}
+  .pv31-locked-input{background:#f8fafc!important;color:#334155!important;cursor:not-allowed!important}
+  .pv31-material-cell{display:flex;flex-direction:column;gap:5px;min-width:260px}
+  .pv31-material-cell select{width:100%;border:1px solid var(--bd);border-radius:6px;padding:5px;font-size:12px;background:#fff}
+  .pv31-complete-hint{margin:8px 0 0;padding:8px 10px;border:1px solid #bfdbfe;border-radius:10px;background:#eff6ff;color:#1e40af;font-size:11px;font-weight:600;line-height:1.5}
+</style>
+<script id="pv31-complete-lock-export-items">
+(function(){
+  if(window.__pv31CompleteLockExportItems)return;
+  window.__pv31CompleteLockExportItems=true;
+
+  function esc(s){
+    if(typeof pvEsc==='function')return pvEsc(s);
+    return String(s==null?'':s).replace(/[&<>\"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});
+  }
+  function js(s){
+    if(typeof pvJs==='function')return pvJs(s);
+    return String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+  }
+  function norm(s){
+    if(typeof pvNorm==='function')return pvNorm(s);
+    return String(s==null?'':s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/đ/g,'d').replace(/\s+/g,' ').trim();
+  }
+  function val(obj,keys){
+    obj=obj||{}; keys=keys||[];
+    for(var i=0;i<keys.length;i++){
+      if(Object.prototype.hasOwnProperty.call(obj,keys[i]) && obj[keys[i]]!=null && String(obj[keys[i]]).trim()!=='')return obj[keys[i]];
+    }
+    return '';
+  }
+  function first(){
+    for(var i=0;i<arguments.length;i++){
+      var v=arguments[i];
+      if(v!==undefined&&v!==null&&String(v).trim()!=='')return v;
+    }
+    return '';
+  }
+  function splitVals(raw){
+    raw=String(raw||'').replace(/\r/g,'\n').trim();
+    if(!raw)return [];
+    var out=[],seen={};
+    raw.split(/\n|;|\||,/g).forEach(function(x){
+      x=String(x||'').replace(/^[-•]+\s*/,'').trim();
+      var k=norm(x);
+      if(x&&!seen[k]){seen[k]=1;out.push(x);}
+    });
+    return out;
+  }
+  function enc(o){try{return encodeURIComponent(JSON.stringify(o||{}));}catch(e){return '';}}
+  function dec(s){try{return JSON.parse(decodeURIComponent(String(s||'')));}catch(e){return {};}}
+  function payloadName(base,loai){
+    base=String(base||'').trim(); loai=String(loai||'').trim();
+    return base?(loai?base+' - '+loai:base):'';
+  }
+  function stripType(full,loai){
+    full=String(full||'').trim(); loai=String(loai||'').trim();
+    if(!full||!loai)return full;
+    var patterns=[' - '+loai,' – '+loai,' — '+loai,' ('+loai+')',' ['+loai+']',': '+loai];
+    var nf=norm(full);
+    for(var i=0;i<patterns.length;i++){
+      var p=patterns[i];
+      if(nf.endsWith(norm(p)))return full.slice(0,full.length-p.length).trim();
+    }
+    return full;
+  }
+  function isPhatSinh(x){
+    x=x||{};
+    return norm(x.loaiDong||'')==='phat sinh' || norm(x.nguonVatTu||'')==='phat sinh' || x.__pv31New===true || x.__pv30Dropdown===true;
+  }
+  function getItemBase(x){
+    x=x||{};
+    var loai=String(first(x.loaiVatTu,val(x,['Loại vật tư','Loai vat tu','Các loại','Cac loai']))||'').trim();
+    var base=String(first(x.tenVatTuGoc,x.tenVatTu,val(x,['Tên vật tư','Tên Chi Tiết / Linh Kiện Thay Thế']))||'').trim();
+    return stripType(base,loai);
+  }
+  function getItemLoai(x){return String(first(x&&x.loaiVatTu,val(x,['Loại vật tư','Loai vat tu','Các loại','Cac loai']))||'').trim();}
+  function getItemCum(x){return String(first(x&&x.cumLinhKien,val(x,['Cụm Linh Kiện','Cụm linh kiện']))||'').trim();}
+  function getItemMa(x){return String(first(x&&x.maVatTu,val(x,['Mã vật tư','Ma vat tu']))||'').trim();}
+  function getItemDvt(x){return String(first(x&&x.donViTinh,val(x,['ĐVT','Đơn vị tính','DVT']))||'').trim();}
+
+  function matRows(){
+    var arr=[];
+    try{if(window.PV&&PV.data&&Array.isArray(PV.data.vatTu))arr=arr.concat(PV.data.vatTu);}catch(e){}
+    try{
+      if((!arr||!arr.length)&&typeof PARTS_MAP!=='undefined'){
+        Object.entries(PARTS_MAP).forEach(function(pair){(pair[1]||[]).forEach(function(p){arr.push({'Tên vật tư':p,'Cụm linh kiện':pair[0]});});});
+      }
+    }catch(e){}
+    return arr||[];
+  }
+  function rowName(r){try{if(typeof pvTenVatTu==='function')return pvTenVatTu(r);}catch(e){} return String(first(val(r,['Tên Chi Tiết / Linh Kiện Thay Thế','Tên vật tư','tenVatTu','lk']),r&&r.tenVatTu)||'').trim();}
+  function rowCum(r){try{if(typeof pvCum==='function')return pvCum(r);}catch(e){} return String(first(val(r,['Cụm Linh Kiện','Cụm linh kiện','cumLinhKien','cum']),r&&r.cumLinhKien)||'').trim();}
+  function rowMa(r){return String(first(val(r,['Mã vật tư','Ma vat tu','maVatTu']),r&&r.maVatTu)||'').trim();}
+  function rowDvt(r){return String(first(val(r,['ĐVT','Đơn vị tính','DVT','donViTinh']),r&&r.donViTinh)||'').trim();}
+  function rowTypes(r){return splitVals(first(val(r,['Các loại','Cac loai','Loại vật tư','Loai vat tu','loaiVatTu']),r&&r.loaiVatTu));}
+
+  function catalog(){
+    var out=[],seen={};
+    matRows().forEach(function(r){
+      var name=rowName(r); if(!name)return;
+      var cum=rowCum(r), key=norm(name)+'|'+norm(cum);
+      if(!seen[key]){seen[key]={name:name,cum:cum,rows:[]};out.push(seen[key]);}
+      seen[key].rows.push(r);
+    });
+    return out.sort(function(a,b){return (a.cum+' '+a.name).localeCompare(b.cum+' '+b.name,'vi');});
+  }
+  function findCat(name,cum){
+    var nn=norm(name), nc=norm(cum);
+    return catalog().find(function(c){return norm(c.name)===nn && (!nc || norm(c.cum)===nc);}) || catalog().find(function(c){return norm(c.name)===nn;}) || null;
+  }
+  function variantsFor(cum,name){
+    var cat=findCat(name,cum); if(!cat)return [];
+    var out=[],seen={};
+    cat.rows.forEach(function(r){
+      var ma=rowMa(r), dvt=rowDvt(r), types=rowTypes(r);
+      if(types.length){
+        types.forEach(function(t){out.push({label:t+(ma&&norm(ma)!==norm(t)?' - '+ma:''),loaiVatTu:t,maVatTu:ma,donViTinh:dvt});});
+      }else if(ma){
+        out.push({label:ma,loaiVatTu:ma,maVatTu:ma,donViTinh:dvt});
+      }else if(dvt){
+        out.push({label:'',loaiVatTu:'',maVatTu:'',donViTinh:dvt});
+      }
+    });
+    var uniq=[],map={};
+    out.forEach(function(v){var k=norm([v.label,v.loaiVatTu,v.maVatTu,v.donViTinh].join('|'));if(!map[k]){map[k]=1;uniq.push(v);}});
+    if(uniq.length>1)uniq=uniq.filter(function(v){return String(v.label||v.loaiVatTu||v.maVatTu||'').trim();});
+    return uniq;
+  }
+  function materialOptions(selectedName,selectedCum){
+    var selCat=findCat(selectedName,selectedCum), selKey=selCat?enc({name:selCat.name,cum:selCat.cum}):'';
+    var html='<option value="">-- Chọn vật tư phát sinh --</option>';
+    catalog().forEach(function(c){
+      var key=enc({name:c.name,cum:c.cum});
+      var label=[c.name,c.cum].filter(Boolean).join(' - ');
+      html+='<option value="'+esc(key)+'" '+(key===selKey?'selected':'')+'>'+esc(label)+'</option>';
+    });
+    if(selectedName&&!selCat){html+='<option value="'+esc(enc({name:selectedName,cum:selectedCum||''}))+'" selected>'+esc(selectedName)+'</option>';}
+    return html;
+  }
+  function applySingleVariant(x){
+    var vars=variantsFor(x.cumLinhKien,x.tenVatTu);
+    if(vars.length===1 && !String(x.loaiVatTu||x.maVatTu||'').trim()){
+      x.loaiVatTu=vars[0].loaiVatTu||'';
+      x.maVatTu=vars[0].maVatTu||'';
+      if(vars[0].donViTinh)x.donViTinh=vars[0].donViTinh;
+    }
+    return x;
+  }
+  function variantHTML(cum,name,currentLoai,currentMa,locked){
+    var vars=variantsFor(cum,name);
+    currentLoai=String(currentLoai||'').trim(); currentMa=String(currentMa||'').trim();
+    if(locked){
+      var label=currentLoai||currentMa||'';
+      return label?'<span class="pv31-code-pill" title="'+esc(label)+'">Loại: '+esc(label)+'</span>':'';
+    }
+    if(vars.length>1){
+      var html='<select class="pv31-variant-select" title="Chọn loại/mã vật tư" onchange="pv31CompleteVariantChanged(this)"><option value="">-- Chọn loại/mã --</option>';
+      vars.forEach(function(v){
+        var selected=(currentLoai&&(norm(v.loaiVatTu)===norm(currentLoai)||norm(v.label)===norm(currentLoai))) || (currentMa&&norm(v.maVatTu)===norm(currentMa));
+        html+='<option value="'+esc(enc(v))+'" '+(selected?'selected':'')+'>'+esc(v.label||v.loaiVatTu||v.maVatTu)+'</option>';
+      });
+      return html+'</select>';
+    }
+    if(vars.length===1 && (vars[0].label||vars[0].loaiVatTu||vars[0].maVatTu))return '<span class="pv31-code-pill">'+esc(vars[0].label||vars[0].loaiVatTu||vars[0].maVatTu)+'</span>';
+    return '';
+  }
+  function setField(tr,k,v){var el=tr&&tr.querySelector('[data-k="'+k+'"]'); if(el)el.value=v||'';}
+  function getField(tr,k){var el=tr&&tr.querySelector('[data-k="'+k+'"]'); return el?el.value:'';}
+
+  window.pv31CompleteMaterialChanged=function(sel){
+    var tr=sel&&sel.closest?sel.closest('tr'):null; if(!tr)return;
+    var data=dec(sel.value);
+    var cat=findCat(data.name||'',data.cum||'');
+    var name=cat?cat.name:(data.name||''), cum=cat?cat.cum:(data.cum||'');
+    setField(tr,'tenVatTu',name); setField(tr,'cumLinhKien',cum); setField(tr,'nguonVatTu','Phát sinh'); setField(tr,'loaiDong','Phát sinh'); setField(tr,'maVatTu',''); setField(tr,'loaiVatTu','');
+    var dvt='';
+    if(cat){for(var i=0;i<cat.rows.length;i++){dvt=rowDvt(cat.rows[i]);if(dvt)break;}}
+    setField(tr,'donViTinh',dvt);
+    var temp=applySingleVariant({tenVatTu:name,cumLinhKien:cum,maVatTu:'',loaiVatTu:'',donViTinh:dvt});
+    setField(tr,'maVatTu',temp.maVatTu); setField(tr,'loaiVatTu',temp.loaiVatTu); setField(tr,'donViTinh',temp.donViTinh);
+    var wrap=tr.querySelector('[data-pv31-variant-wrap]'); if(wrap)wrap.innerHTML=variantHTML(cum,name,temp.loaiVatTu,temp.maVatTu,false);
+  };
+  window.pv31CompleteVariantChanged=function(sel){
+    var tr=sel&&sel.closest?sel.closest('tr'):null; if(!tr)return;
+    var v=dec(sel.value);
+    setField(tr,'loaiVatTu',v.loaiVatTu||''); setField(tr,'maVatTu',v.maVatTu||''); if(v.donViTinh)setField(tr,'donViTinh',v.donViTinh||'');
+  };
+
+  function hiddenFields(x){
+    return '<input type="hidden" data-k="tenVatTu" value="'+esc(x.tenVatTu||'')+'">'+
+      '<input type="hidden" data-k="nguonVatTu" value="'+esc(x.nguonVatTu||'')+'">'+
+      '<input type="hidden" data-k="cumLinhKien" value="'+esc(x.cumLinhKien||'')+'">'+
+      '<input type="hidden" data-k="maVatTu" value="'+esc(x.maVatTu||'')+'">'+
+      '<input type="hidden" data-k="donViTinh" value="'+esc(x.donViTinh||'')+'">'+
+      '<input type="hidden" data-k="loaiVatTu" value="'+esc(x.loaiVatTu||'')+'">'+
+      '<input type="hidden" data-k="loaiDong" value="'+esc(x.loaiDong||'')+'">';
+  }
+  function lockedCellHTML(x){
+    var base=getItemBase(x), loai=getItemLoai(x), temp={tenVatTu:base,nguonVatTu:first(x.nguonVatTu,'Phiếu xuất'),cumLinhKien:getItemCum(x),maVatTu:getItemMa(x),donViTinh:getItemDvt(x),loaiVatTu:loai,loaiDong:first(x.loaiDong,'Chuẩn bị')};
+    return '<div class="pv31-locked-cell"><div class="pv31-locked-name">'+esc(payloadName(base,loai))+'</div>'+variantHTML(temp.cumLinhKien,base,loai,temp.maVatTu,true)+'<div class="pv31-lock-note">🔒 Lấy từ phiếu xuất vật tư, không cho sửa tên / loại / SL xuất.</div></div>'+hiddenFields(temp);
+  }
+  function phatSinhCellHTML(x){
+    var base=getItemBase(x), loai=getItemLoai(x), temp=applySingleVariant({tenVatTu:base,nguonVatTu:'Phát sinh',cumLinhKien:getItemCum(x),maVatTu:getItemMa(x),donViTinh:getItemDvt(x),loaiVatTu:loai,loaiDong:'Phát sinh'});
+    return '<div class="pv31-material-cell"><select class="pv31-material-select" onchange="pv31CompleteMaterialChanged(this)">'+materialOptions(temp.tenVatTu,temp.cumLinhKien)+'</select><span data-pv31-variant-wrap>'+variantHTML(temp.cumLinhKien,temp.tenVatTu,temp.loaiVatTu,temp.maVatTu,false)+'</span></div>'+hiddenFields(temp);
+  }
+  function completeRowHTML(x,i){
+    x=x||{};
+    var phatSinh=isPhatSinh(x);
+    var sx=first(x.soLuongXuatKho,x.soLuongCan,x['Số lượng xuất kho'],x['Số lượng cần']);
+    var cell=phatSinh?phatSinhCellHTML(x):lockedCellHTML(x);
+    var loaiDong=phatSinh?'Phát sinh':first(x.loaiDong,'Chuẩn bị');
+    var slXuat=phatSinh?'<input type="number" min="0" value="'+esc(String(sx))+'" data-k="soLuongXuatKho">':'<input class="pv31-locked-input" type="number" min="0" value="'+esc(String(sx))+'" data-k="soLuongXuatKho" readonly tabindex="-1" title="Số lượng xuất kho lấy từ phiếu xuất vật tư">';
+    return '<tr data-pv31-origin="'+(phatSinh?'phat-sinh':'phieu-xuat')+'"><td style="text-align:center">'+(i+1)+'</td><td>'+cell+'</td><td>'+slXuat+'</td><td><input type="number" min="0" value="'+esc(String(first(x.soLuongSuDung,x['Số lượng sử dụng'])))+'" data-k="soLuongSuDung"></td><td><input type="number" min="0" value="'+esc(String(first(x.soLuongNhapKho,x['Số lượng nhập kho'])))+'" data-k="soLuongNhapKho"></td><td><select data-k="tinhTrangNhapKho">'+['','Mới','Cũ','Tốt','Hỏng'].map(function(s){return '<option '+(s===first(x.tinhTrangNhapKho,x['Tình trạng nhập kho'])?'selected':'')+'>'+s+'</option>';}).join('')+'</select></td><td><input value="'+esc(first(x.ghiChu,x['Ghi chú']))+'" data-k="ghiChu"></td><td><span class="pv31-lock-badge">'+esc(loaiDong)+'</span></td></tr>';
+  }
+
+  window.pv17CompleteRowHTML=completeRowHTML;
+  window.pv16CompleteRowHTML=completeRowHTML;
+
+  window.pv17AddCompleteRow=function(){
+    var tb=document.querySelector('#pv18_complete_table tbody,#pv17_complete_table tbody,#pv16_complete_table tbody');
+    if(!tb)return;
+    tb.insertAdjacentHTML('beforeend',completeRowHTML({loaiDong:'Phát sinh',nguonVatTu:'Phát sinh',__pv31New:true},tb.children.length));
+  };
+  window.pv16AddCompleteRow=window.pv17AddCompleteRow;
+
+  window.pv17CollectCompleteItems=function(){
+    return Array.from(document.querySelectorAll('#pv18_complete_table tbody tr,#pv17_complete_table tbody tr,#pv16_complete_table tbody tr')).map(function(tr,i){
+      var obj={stt:i+1};
+      tr.querySelectorAll('[data-k]').forEach(function(el){obj[el.dataset.k]=el.value;});
+      obj.tenVatTuGoc=String(obj.tenVatTu||'').trim();
+      obj.loaiVatTu=String(obj.loaiVatTu||'').trim();
+      obj.tenVatTu=payloadName(obj.tenVatTuGoc,obj.loaiVatTu);
+      obj.soLuongCan=obj.soLuongXuatKho;
+      if(!obj.loaiDong)obj.loaiDong=(tr.getAttribute('data-pv31-origin')==='phat-sinh')?'Phát sinh':'Chuẩn bị';
+      return obj;
+    }).filter(function(x){return String(x.tenVatTuGoc||x.tenVatTu||'').trim();});
+  };
+  window.pv16CollectCompleteItems=window.pv17CollectCompleteItems;
+
+  window.pv17RenderCompleteForm=function(root,phieu,items){
+    var dt=new Date(); dt.setMinutes(dt.getMinutes()-dt.getTimezoneOffset());
+    var selectedNguoi=(phieu&&phieu.nguoiNhapKho)||((typeof CU!=='undefined'&&CU&&(CU.name||CU.fullName))||'');
+    var peopleCtl=(typeof pv19PeopleOptionsHTML==='function')?('<select class="inp" id="pv17_nguoiNhap">'+pv19PeopleOptionsHTML(selectedNguoi)+'</select>'):('<input class="inp" id="pv17_nguoiNhap" value="'+esc(selectedNguoi)+'" placeholder="Gõ tên người nhập kho...">');
+    root.innerHTML='<div class="card"><div class="cb pv18-form-head" style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><div><b>Cập nhật hoàn thành phiếu: '+esc(phieu&&phieu.maPhieu)+'</b><div class="pv17-small">'+esc((phieu&&(phieu.danhSachMaMay||phieu.maMay))||'')+' · '+esc((phieu&&(phieu.danhSachTenTrai||phieu.tenTrai))||'')+'</div></div><button class="btn sm" onclick="pv17RenderCompletePage()">← Quay lại</button></div><div class="pv18-form-grid"><div class="iw"><div class="il">Ngày giờ nhập kho *</div><input class="inp" type="datetime-local" id="pv17_ngayNhap" value="'+dt.toISOString().slice(0,16)+'"></div><div class="iw"><div class="il">Người nhập kho *</div>'+peopleCtl+'</div></div><div class="pv31-complete-hint">Danh sách bên dưới lấy từ phiếu xuất vật tư đã nhập trước đó. Các dòng gốc bị khóa tên vật tư, loại vật tư và SL xuất kho; chỉ nhập SL sử dụng, SL nhập kho, tình trạng nhập và ghi chú. Vật tư phát sinh thêm mới vẫn được chọn/sửa.</div><div class="pv18-scroll" style="margin-top:12px"><table id="pv18_complete_table"><thead><tr><th style="width:44px">STT</th><th style="width:360px">Hạng mục vật tư / loại</th><th style="width:90px">SL xuất kho</th><th style="width:90px">SL sử dụng</th><th style="width:90px">SL nhập kho</th><th style="width:130px">Tình trạng nhập</th><th style="width:170px">Ghi chú</th><th style="width:105px">Loại dòng</th></tr></thead><tbody>'+((items||[]).map(function(x,i){return completeRowHTML(x,i);}).join(''))+'</tbody></table></div><div class="pv18-form-actions"><button class="btn bg-a sm" onclick="pv17AddCompleteRow()">➕ Thêm vật tư phát sinh</button><button class="btn bg-g" onclick="pv17SubmitComplete(\''+js(phieu&&phieu.maPhieu)+'\')">✅ Lưu hoàn thiện</button></div><div class="ih" style="margin-top:8px">Khi lưu hoàn thiện, hệ thống xóa link/file PDF - Word xuất kho cũ. Lần bấm PDF/Word sau sẽ tạo bản hoàn thành mới.</div></div>';
+  };
+  window.pv16RenderCompleteForm=window.pv17RenderCompleteForm;
 })();
 </script>
 
