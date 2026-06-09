@@ -4596,8 +4596,7 @@ async function fetchCurrentMachineHours(forceRefresh = false) {
 
 function parseCurrentHoursCSV(csv) {
   // Parse CSV đơn giản — Google Sheets gviz CSV
-  const lines = csv.split('
-').map(l => l.trim()).filter(Boolean);
+  const lines = csv.split('\n').map(l => l.trim()).filter(Boolean);
   const result = {};
   // Tìm header row chứa "TÊN, MÃ" hoặc "Mã máy" ở cột C (index 2)
   // Dữ liệu: hàng 4 = header (index 3), từ hàng 5 trở đi = data (index 4+)
