@@ -4856,8 +4856,8 @@ function lcSelectFilter(type, val) {
   const inp=document.getElementById(type==='mm'?'lc-mm':'lc-vt');
   const list=document.getElementById(type==='mm'?'lc-mm-list':'lc-vt-list');
   if(inp) inp.value=val; if(list) list.style.display='none';
-  if(type==='mm'){const v=document.getElementById('lc-vt');if(v)v.value='';}
-  if(type==='vt'){const m=document.getElementById('lc-mm');if(m)m.value='';}
+  // 2 filter độc lập — không xóa nhau
+  // Có thể lọc đồng thời máy + vật tư
   renderLifecycle();
 }
 // Outlier detection: lifeHours deviating > 2sigma
@@ -4956,8 +4956,9 @@ function renderLifecycle() {
   const lcMm = (document.getElementById('lc-mm') || {}).value || '';
   const lcVt = (document.getElementById('lc-vt') || {}).value || '';
   const normStr = s => String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\u0111/g,'d');
-  const isMachineMode = lcMm.length > 0;
-  const isPartMode = !isMachineMode && lcVt.length > 0;
+  const isMachineMode = lcMm.length > 0 && lcVt.length === 0;
+  const isPartMode = lcVt.length > 0 && lcMm.length === 0;
+  const isBothMode = lcMm.length > 0 && lcVt.length > 0;
 
   let filtered = data.filter(d => {
     if (lcVt && !normStr(d.name).includes(normStr(lcVt))) return false;
@@ -4977,7 +4978,7 @@ function renderLifecycle() {
   // ── KPI 2 hàng 3 cột ─────────────────────────────────────────
   const kpiEl = document.getElementById('lc-kpi');
   if (kpiEl) {
-    const scopeData = isMachineMode||isPartMode ? filtered : data;
+    const scopeData = isMachineMode||isPartMode||isBothMode ? filtered : data;
     const total=scopeData.length, withDef=scopeData.filter(d=>d.avgGio!==null).length;
     const critical=scopeData.filter(d=>d.warnLevel===2), warn=scopeData.filter(d=>d.warnLevel===1);
     const outlierCount=detectOutliers(scopeData).length;
@@ -5053,13 +5054,11 @@ function renderLifecycle() {
   const allPanel = document.getElementById('lc-charts-all');
   const mmPanel  = document.getElementById('lc-charts-machine');
   const ptPanel  = document.getElementById('lc-charts-part');
-  if (allPanel) allPanel.style.display = (!isMachineMode && !isPartMode) ? '' : 'none';
-  if (mmPanel)  mmPanel.style.display  = isMachineMode ? '' : 'none';
-  if (ptPanel)  ptPanel.style.display  = isPartMode    ? '' : 'none';
+  if (allPanel) allPanel.style.display = (!isMachineMode && !isPartMode && !isBothMode) ? '' : 'none';
+  if (mmPanel)  mmPanel.style.display  = (isMachineMode || isBothMode) ? '' : 'none';
+  if (ptPanel)  ptPanel.style.display  = isPartMode ? '' : 'none';
 
-  if (isMachineMode) {
-    // Find exact machine match from filtered data
-    const exactMm = filtered.length ? lcMm : lcMm;
+  if (isMachineMode || isBothMode) {
     renderMachineCharts(lcMm, filtered);
   } else if (isPartMode) {
     // Find exact part
@@ -5085,9 +5084,30 @@ function renderLifecycle() {
   // ── Count + table ─────────────────────────────────────────────
   const countEl = document.getElementById('lc-count');
   if (countEl) {
-    const ctx = isMachineMode ? ` · Máy: ${lcMm}` : isPartMode ? ` · Vật tư: ${lcVt}` : '';
+    const ctx = isBothMode ? ` · Máy: ${lcMm} · Vật tư: ${lcVt}` : isMachineMode ? ` · Máy: ${lcMm}` : isPartMode ? ` · Vật tư: ${lcVt}` : '';
     countEl.textContent = `${filtered.length}/${data.length} vật tư${ctx}`;
   }
+  // Banner filter
+  const bannerEl = document.getElementById('lc-filter-banner');
+  if (bannerEl) {
+    if (isBothMode) {
+      bannerEl.style.display = '';
+      bannerEl.innerHTML = `<span style="font-size:11px;color:#1e40af">📌 Máy: <strong>${lcMm}</strong> &nbsp;·&nbsp; Vật tư: <strong>${lcVt}</strong> &nbsp;
+        <button class="btn sm" style="font-size:9px;padding:1px 7px" onclick="document.getElementById('lc-mm').value='';renderLifecycle()">✕ Xoá lọc máy</button> &nbsp;
+        <button class="btn sm" style="font-size:9px;padding:1px 7px" onclick="document.getElementById('lc-vt').value='';renderLifecycle()">✕ Xoá lọc vật tư</button></span>`;
+    } else if (isMachineMode) {
+      bannerEl.style.display = '';
+      bannerEl.innerHTML = `<span style="font-size:11px;color:#1e40af">📌 Máy: <strong>${lcMm}</strong> &nbsp;
+        <button class="btn sm" style="font-size:9px;padding:1px 7px" onclick="document.getElementById('lc-mm').value='';renderLifecycle()">✕ Xoá lọc</button></span>`;
+    } else if (isPartMode) {
+      bannerEl.style.display = '';
+      bannerEl.innerHTML = `<span style="font-size:11px;color:#1e40af">📌 Vật tư: <strong>${lcVt}</strong> trên tất cả máy &nbsp;
+        <button class="btn sm" style="font-size:9px;padding:1px 7px" onclick="document.getElementById('lc-vt').value='';renderLifecycle()">✕ Xoá lọc</button></span>`;
+    } else {
+      bannerEl.style.display = 'none';
+    }
+  }
+
   // Cập nhật indicator nguồn giờ hiện tại
   const hoursStatus = document.getElementById('lc-hours-status');
   if (hoursStatus) {
@@ -6333,8 +6353,7 @@ async function syncReportGS(rep){
     p.pp||'',      // col18 PP Xử Lý
     ctxt(rep.cl),  // col19 Kết Luận
     rep.gc||'',    // col20 Ghi Chú
-    formatHoursToDuration(rep.soGioVanHanh)||'', // col21 Số Giờ Vận Hành (legacy alias)
-    formatHoursToDuration(rep.soGioVanHanh)||''  // col22 Số Giờ Đồng Hồ Máy
+    formatHoursToDuration(rep.soGioVanHanh)||''  // col21 Số Giờ ĐH Máy (cột V)
   ]);
   const d = await callGoogleAPI('write', {sheet:'5', rows});
   if(d&&d.ok){
@@ -6482,6 +6501,7 @@ async function pullSheet5(){
   if(C.pp===null)    C.pp    = C.ktv2!==null ? 18 : 17;
   if(C.cl===null)    C.cl    = C.ktv2!==null ? 19 : 18;
   if(C.gc===null)    C.gc    = C.ktv2!==null ? 20 : 19;
+  if(C.soGioVanHanh===null) C.soGioVanHanh = 21; // Col V = index 21
   console.log('[Sheet5] Detected columns:', C);
   checkSheet5Structure(C);
 
