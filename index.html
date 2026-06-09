@@ -169,8 +169,8 @@
       v15WriteJson(V15_PV_APP_CACHE_KEY, PV.data);
       if (curPage === 'taoPhieu' && document.getElementById('pvb_formWrap')) {
         if (typeof pvBDSCRenderVatTuSearch === 'function') pvBDSCRenderVatTuSearch();
-        if (selected.length === 0 && typeof pvBDSCAddFixed === 'function') {
-          pvBDSCAddFixed();
+        if (typeof pvBDSCAddFixed === 'function') {
+          pvBDSCAddFixed(); // Luôn add fixed sau mỗi sync để không bỏ sót
           if (typeof pvBDSCRenderSelected === 'function') pvBDSCRenderSelected();
         }
       }
@@ -864,9 +864,9 @@ tbody tr{border-bottom:1px solid #f1f5f9;transition:.1s}tbody tr:hover{backgroun
           <div class="iw"><div class="il">Tỉnh / Thành phố</div><input class="inp" id="rf-tinh" readonly placeholder="Tự động..."></div>
           <div class="iw"><div class="il">Trạng thái máy</div><input class="inp" id="rf-ts" readonly placeholder="Tự động..."></div>
           <div class="iw"><div class="il">⏱ Số giờ đồng hồ máy *</div>
-            <input class="inp" id="rf-soGioVanHanh" type="number" min="0" step="0.5" placeholder="VD: 12500 (giờ tổng từ khi lắp máy)"
-              oninput="onSoGioVanHanhInput(this)">
-            <div class="ih">Tổng số giờ máy đã chạy từ khi lắp đặt đến thời điểm BDSC này (đọc từ đồng hồ máy). Hệ thống dùng để tính tuổi thọ linh kiện = giờ lần này − giờ lần BDSC trước.</div>
+            <input class="inp" id="rf-soGioVanHanh" type="text" inputmode="numeric" placeholder="VD: 12500 hoặc 12500:30:00"
+              oninput="onSoGioVanHanhInput(this)" onblur="onSoGioVanHanhBlur(this)">
+            <div class="ih">Đọc từ đồng hồ vận hành trên máy — tổng giờ từ khi lắp đến thời điểm BDSC. Nhập số giờ (12500) hoặc định dạng HH:MM:SS (12500:30:00). Hệ thống tính tuổi thọ linh kiện = giờ lần này − giờ lần BDSC trước.</div>
           </div>
         </div>
       </div>
@@ -1169,8 +1169,11 @@ tbody tr{border-bottom:1px solid #f1f5f9;transition:.1s}tbody tr:hover{backgroun
         <div class="prbtn" id="lc-sort-btn-warn" onclick="lcSetSort('warn',this)">&#x26A0;&#xFE0F; Cần chú ý trước</div>
         <div class="prbtn" id="lc-sort-btn-avg" onclick="lcSetSort('avg',this)">&#x23F1; TB giờ/lần thấp nhất</div>
         <div class="prbtn" id="lc-sort-btn-name" onclick="lcSetSort('name',this)">&#x1F524; Tên A→Z</div>
-        <div style="margin-left:auto;display:flex;gap:6px">
-          <button class="btn bg-b sm" onclick="pullSheet5().then(()=>renderLifecycle())">&#x1F504; Tải dữ liệu mới</button>
+        <div style="margin-left:auto;display:flex;gap:6px;align-items:center">
+          <span id="lc-hours-status" style="font-size:10px;color:var(--mu)"></span>
+          <button class="btn bg-b sm" onclick="pullSheet5().then(()=>renderLifecycle())">&#x1F504; Tải BC mới</button>
+          <button class="btn sm" style="background:#fffbeb;border-color:#fde68a;color:#d97706;font-size:10px"
+            onclick="fetchCurrentMachineHours(true).then(()=>renderLifecycle())" title="Cập nhật giờ đồng hồ máy từ bảng theo dõi vận hành">⏱ Cập nhật giờ máy</button>
           <button class="btn bg-g sm" onclick="lcExportXLSX()">&#x1F4E5; Xuất Excel</button>
         </div>
       </div>
@@ -1934,6 +1937,49 @@ function hardReset(){
 }
 
 // ═══════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════
+// Giờ đồng hồ máy — Duration format HH:MM:SS (Google Sheets)
+//
+// Google Sheets "Thời lượng" lưu: HH:MM:SS (ví dụ: 2881:35:00)
+// Khi đọc về web qua getDisplayValues → string "2881:35:00"
+// Khi KTV nhập: có thể nhập 12500 (giờ đơn), hoặc 12500:30 (giờ:phút)
+//
+// parseDurationToHours(val) → số giờ thực (float)
+//   "2881:35:00" → 2881.583...
+//   "12500"      → 12500
+//   "12500:30"   → 12500.5
+//   2881.58      → 2881.58 (already number)
+//
+// formatHoursToDuration(h) → string "HHH:MM:SS" để ghi Sheet
+//   12500   → "12500:00:00"
+//   12500.5 → "12500:30:00"
+// ══════════════════════════════════════════════════════
+function parseDurationToHours(val) {
+  if (val === null || val === undefined || val === '') return 0;
+  // Already a number
+  if (typeof val === 'number') return val;
+  const s = String(val).trim();
+  if (!s) return 0;
+  // Format HH:MM:SS or HH:MM
+  const parts = s.split(':');
+  if (parts.length >= 2) {
+    const h = parseFloat(parts[0]) || 0;
+    const m = parseFloat(parts[1]) || 0;
+    const sec = parts[2] ? parseFloat(parts[2]) || 0 : 0;
+    return h + m / 60 + sec / 3600;
+  }
+  // Plain number string
+  return parseFloat(s) || 0;
+}
+
+function formatHoursToDuration(hours) {
+  if (!hours || isNaN(hours) || hours <= 0) return '';
+  const totalMinutes = Math.round(hours * 60);
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  return `${h}:${String(m).padStart(2, '0')}:00`;
+}
+
 // callGoogleAPI — Hàm DUY NHẤT gọi Apps Script
 // Dùng text/plain + redirect:follow để bypass CORS
 // ═══════════════════════════════════════════════════
@@ -2905,7 +2951,7 @@ function collectReport(){
     nkt:document.getElementById('rf-nkt')?.value||'',
     gkt:document.getElementById('rf-gkt')?.value||'',
     tg:document.getElementById('rf-tg')?.value||'',
-    soGioVanHanh:parseFloat(document.getElementById('rf-soGioVanHanh')?.value||'0')||0,
+    soGioVanHanh:parseDurationToHours(document.getElementById('rf-soGioVanHanh')?.value||'0'),
     phen,cl:curConclusion,gc:document.getElementById('rf-gc')?.value||'',
     status:'submitted',cat:new Date().toISOString()
   };
@@ -3082,7 +3128,7 @@ function viewRep(id){
           </div>
           ${r.soGioVanHanh>0?`<div>
             <div style="font-size:9px;color:#d97706;font-weight:700;margin-bottom:2px">⏱ Giờ đồng hồ máy</div>
-            <div style="font-size:12px;font-weight:700;color:#d97706">${r.soGioVanHanh}h</div>
+            <div style="font-size:12px;font-weight:700;color:#d97706">${r.soGioVanHanh > 0 ? formatHoursToDuration(r.soGioVanHanh) : '—'}</div>
           </div>`:''}
         </div>
       </div>
@@ -4509,6 +4555,92 @@ function lcSetSort(s, el) {
 // Định mức TB = trung bình tất cả tuổi thọ thu thập được trên mọi máy
 // ═══════════════════════════════════════════════════════════════
 
+// ══════════════════════════════════════════════════════════════
+// GIỜ HIỆN TẠI MÁY — Fetch từ Google Sheet riêng
+// Sheet: 1WEp0EiSTTGmRxGZWz7zMgsyvyyQ5TNkevkr6ql5kxXs
+// Tab: "Theo dõi hoạt động bảo dưỡng"
+// Cột C = Mã máy, Cột H = Số giờ chạy hiện tại
+// ══════════════════════════════════════════════════════════════
+const LC_HOURS_SHEET_ID = '1WEp0EiSTTGmRxGZWz7zMgsyvyyQ5TNkevkr6ql5kxXs';
+const LC_HOURS_SHEET_TAB = 'Theo dõi hoạt động bảo dưỡng';
+
+// Cache: {maMay: gioHienTai (số giờ)}
+let _lcCurrentHoursCache = {};
+let _lcCurrentHoursLastFetch = 0;
+let _lcCurrentHoursFetching = false;
+
+async function fetchCurrentMachineHours(forceRefresh = false) {
+  const now = Date.now();
+  // Cache 5 phút
+  if (!forceRefresh && now - _lcCurrentHoursLastFetch < 5 * 60 * 1000 && Object.keys(_lcCurrentHoursCache).length > 0) {
+    return _lcCurrentHoursCache;
+  }
+  if (_lcCurrentHoursFetching) return _lcCurrentHoursCache;
+  _lcCurrentHoursFetching = true;
+  try {
+    const tabEncoded = encodeURIComponent(LC_HOURS_SHEET_TAB);
+    const url = `https://docs.google.com/spreadsheets/d/${LC_HOURS_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${tabEncoded}`;
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const csv = await resp.text();
+    _lcCurrentHoursCache = parseCurrentHoursCSV(csv);
+    _lcCurrentHoursLastFetch = Date.now();
+    console.log('[LC] Giờ hiện tại máy:', Object.keys(_lcCurrentHoursCache).length, 'máy');
+  } catch(e) {
+    console.warn('[LC] Không fetch được giờ hiện tại:', e.message);
+  } finally {
+    _lcCurrentHoursFetching = false;
+  }
+  return _lcCurrentHoursCache;
+}
+
+function parseCurrentHoursCSV(csv) {
+  // Parse CSV đơn giản — Google Sheets gviz CSV
+  const lines = csv.split('
+').map(l => l.trim()).filter(Boolean);
+  const result = {};
+  // Tìm header row chứa "TÊN, MÃ" hoặc "Mã máy" ở cột C (index 2)
+  // Dữ liệu: hàng 4 = header (index 3), từ hàng 5 trở đi = data (index 4+)
+  // Nhưng gviz CSV không giữ số hàng, nên tìm hàng có "STT" hoặc số ở cột A
+  let dataStart = 0;
+  for (let i = 0; i < Math.min(lines.length, 10); i++) {
+    const cells = parseCSVLine(lines[i]);
+    const colA = String(cells[0] || '').trim().toLowerCase();
+    if (colA === 'stt' || colA === '1') { dataStart = colA === 'stt' ? i + 1 : i; break; }
+  }
+  for (let i = dataStart; i < lines.length; i++) {
+    const cells = parseCSVLine(lines[i]);
+    const maMay = String(cells[2] || '').trim(); // Cột C (index 2)
+    const gioRaw = String(cells[7] || '').trim(); // Cột H (index 7)
+    if (!maMay || !gioRaw) continue;
+    const gio = parseDurationToHours(gioRaw);
+    if (maMay && gio > 0) {
+      result[maMay] = gio;
+    }
+  }
+  return result;
+}
+
+function parseCSVLine(line) {
+  // Xử lý CSV có dấu ngoặc kép
+  const result = [];
+  let current = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQuotes && line[i+1] === '"') { current += '"'; i++; }
+      else inQuotes = !inQuotes;
+    } else if (ch === ',' && !inQuotes) {
+      result.push(current); current = '';
+    } else {
+      current += ch;
+    }
+  }
+  result.push(current);
+  return result;
+}
+
 // Build the core data structure from REPORTS
 function buildLifecycleData() {
   const list = REPORTS.filter(r => r.status !== 'draft');
@@ -4522,7 +4654,7 @@ function buildLifecycleData() {
     if (!machineTimeline[mm]) machineTimeline[mm] = [];
     machineTimeline[mm].push({
       date: r.nd || r.cat || '',
-      gio: parseFloat(r.soGioVanHanh) || 0,
+      gio: parseDurationToHours(r.soGioVanHanh) || 0,
       repId: r.id,
       rep: r
     });
@@ -4549,18 +4681,33 @@ function buildLifecycleData() {
     return null;
   }
 
-  // Lấy giờ đồng hồ MỚI NHẤT của từng máy (proxy "giờ hiện tại")
+  // Lấy giờ đồng hồ HIỆN TẠI của từng máy:
+  // Ưu tiên: cache từ Google Sheet riêng (fetch bởi fetchCurrentMachineHours)
+  // Fallback: max giờ trong các BC đã lưu (nếu chưa fetch được)
   const latestGioByMachine = {};
   Object.entries(machineTimeline).forEach(([mm, arr]) => {
-    const maxG = Math.max(...arr.map(t => t.gio).filter(g => g > 0), 0);
-    latestGioByMachine[mm] = maxG;
+    const fromSheet = _lcCurrentHoursCache[mm] || 0;
+    const fromBC = Math.max(...arr.map(t => t.gio).filter(g => g > 0), 0);
+    latestGioByMachine[mm] = fromSheet > 0 ? fromSheet : fromBC;
+  });
+  // Thêm các máy có trong cache sheet nhưng chưa có BC nào
+  Object.entries(_lcCurrentHoursCache).forEach(([mm, gio]) => {
+    if (!latestGioByMachine[mm]) latestGioByMachine[mm] = gio;
+  });
+  // Flag reset: máy nào có latestGio < lastGio của BC gần nhất
+  const machineResetFlag = {};
+  Object.entries(machineTimeline).forEach(([mm, arr]) => {
+    const lastBC = arr.filter(t => t.gio > 0).pop();
+    if (lastBC && latestGioByMachine[mm] > 0 && latestGioByMachine[mm] < lastBC.gio) {
+      machineResetFlag[mm] = true;
+    }
   });
 
   // ── Bước 2: Thu thập sự kiện thay thế và tính tuổi thọ từng lần ──
   const byPart = {};
 
   list.forEach(r => {
-    const curGio = parseFloat(r.soGioVanHanh) || 0;
+    const curGio = parseDurationToHours(r.soGioVanHanh) || 0;
     const maMay = r.maMay || '__unknown__';
     const prevGio = getPrevGio(maMay, r.id);
 
@@ -4637,8 +4784,9 @@ function buildLifecycleData() {
 
     // Giờ đã dùng kể từ lần thay cuối = latestGio của máy đó - gio lần thay cuối
     const machLatest = latestGioByMachine[lastMaMay] || 0;
+    const isReset = machineResetFlag[lastMaMay] || false;
     let hoursUsed = null;
-    if (lastGio > 0 && machLatest >= lastGio) {
+    if (!isReset && lastGio > 0 && machLatest >= lastGio) {
       hoursUsed = Math.round(machLatest - lastGio);
     }
 
@@ -4648,7 +4796,10 @@ function buildLifecycleData() {
     // Warning level
     let warnLevel = 0;
     let warnMsg = '✅ Trong định mức';
-    if (pct !== null) {
+    if (isReset) {
+      warnLevel = 1;
+      warnMsg = '🔄 Đồng hồ đã reset';
+    } else if (pct !== null) {
       if (pct >= 100) { warnLevel = 2; warnMsg = '⛔ QUÁ HẠN — Cần thay ngay'; }
       else if (pct >= 80) { warnLevel = 1; warnMsg = '⚠️ Sắp đến hạn (>80%)'; }
     } else if (avgGio === null) {
@@ -4675,6 +4826,7 @@ function buildLifecycleData() {
       stdGio,
       cvPct,
       hoursUsed,
+      isReset,
       machLatest,
       pct,
       warnLevel,
@@ -4794,6 +4946,13 @@ function lcExportOutliersXLSX(){
   exportToXLSX(rows,'Bất thường',`${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}_BatThuong_VatTu.xlsx`);
 }
 function renderLifecycle() {
+  // Fetch giờ hiện tại máy từ Sheet riêng nếu chưa có
+  // Không block — render ngay với cache hiện tại, tự render lại khi fetch xong
+  if (Object.keys(_lcCurrentHoursCache).length === 0 && !_lcCurrentHoursFetching) {
+    fetchCurrentMachineHours().then(() => {
+      if (curPage === 'lifecycle') renderLifecycle();
+    }).catch(() => {});
+  }
   const data = buildLifecycleData();
   const lcMm = (document.getElementById('lc-mm') || {}).value || '';
   const lcVt = (document.getElementById('lc-vt') || {}).value || '';
@@ -4875,10 +5034,11 @@ function renderLifecycle() {
             <div style="font-size:10px;font-weight:600;color:${color};margin-top:2px">${label}</div>
           </div>`).join('')}
       </div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
         ${[
           {label:'⛔ Quá hạn — Thay ngay',val:critical.length,color:'#dc2626',bg:'#fef2f2',border:'#fca5a5',click:'onclick="_lcShowCritical()"'},
           {label:'⚠️ Sắp đến hạn thay',val:warn.length,color:'#d97706',bg:'#fffbeb',border:'#fde68a',click:'onclick="_lcShowWarn()"'},
+          {label:'🔄 Đồng hồ đã reset',val:data.filter(d=>d.isReset).length,color:'#0891b2',bg:'#ecfeff',border:'#a5f3fc',click:''},
           {label:'⚡ Điểm bất thường',val:outlierCount,color:'#7c3aed',bg:'#f5f3ff',border:'#c4b5fd',click:'onclick="showOutlierModal()"'},
         ].map(({label,val,color,bg,border,click})=>`
           <div style="background:${bg};border:1.5px solid ${border};border-radius:10px;padding:10px;text-align:center;cursor:pointer;transition:.15s"
@@ -4929,6 +5089,24 @@ function renderLifecycle() {
     const ctx = isMachineMode ? ` · Máy: ${lcMm}` : isPartMode ? ` · Vật tư: ${lcVt}` : '';
     countEl.textContent = `${filtered.length}/${data.length} vật tư${ctx}`;
   }
+  // Cập nhật indicator nguồn giờ hiện tại
+  const hoursStatus = document.getElementById('lc-hours-status');
+  if (hoursStatus) {
+    const nMachinesWithHours = Object.keys(_lcCurrentHoursCache).length;
+    if (nMachinesWithHours > 0) {
+      const lastFetch = _lcCurrentHoursLastFetch ? new Date(_lcCurrentHoursLastFetch) : null;
+      const timeStr = lastFetch ? `${lastFetch.getHours()}:${String(lastFetch.getMinutes()).padStart(2,'0')}` : '';
+      hoursStatus.innerHTML = `<span style="color:#16a34a">✅ Giờ máy: ${nMachinesWithHours} máy${timeStr?' · '+timeStr:''}</span>`;
+    } else if (_lcCurrentHoursFetching) {
+      hoursStatus.innerHTML = `<span style="color:#d97706">⏳ Đang tải giờ máy...</span>`;
+    } else {
+      hoursStatus.innerHTML = `<span style="color:#94a3b8">⚠️ Chưa có giờ hiện tại máy</span>`;
+    }
+  }
+  // Cập nhật KPI reset count
+  const resetCount = data.filter(d => d.isReset).length;
+  const resetKpi = document.getElementById('lc-kpi-reset');
+  if (resetKpi) resetKpi.textContent = resetCount;
   renderLifecycleTable(filtered);
   updateLifecycleBadge(data);
 }
@@ -4943,8 +5121,8 @@ function renderLifecycleTable(rows) {
     return;
   }
   tbody.innerHTML = rows.map((d, idx) => {
-    const barColor = d.warnLevel === 2 ? '#dc2626' : d.warnLevel === 1 ? '#d97706' : '#16a34a';
-    const badgeCls = d.warnLevel === 2 ? 'br' : d.warnLevel === 1 ? 'ba' : 'bg';
+    const barColor = d.warnLevel === 2 ? '#dc2626' : d.isReset ? '#0891b2' : d.warnLevel === 1 ? '#d97706' : '#16a34a';
+    const badgeCls = d.warnLevel === 2 ? 'br' : d.isReset ? 'bb' : d.warnLevel === 1 ? 'ba' : 'bg';
     const pctBar = d.pct !== null ? `
       <div style="font-size:10px;font-weight:700;color:${barColor};margin-bottom:2px">${d.pct}%</div>
       <div style="height:5px;background:#f1f5f9;border-radius:99px;overflow:hidden;width:70px">
@@ -4964,8 +5142,8 @@ function renderLifecycleTable(rows) {
       <td style="padding:7px 10px;text-align:center;font-family:var(--mono);font-size:12px;font-weight:700;color:${d.avgGio ? '#0d6e3f' : '#94a3b8'}">${d.avgGio !== null ? d.avgGio + 'h' : '—'}<div>${defLabel}</div></td>
       <td style="padding:7px 10px;text-align:center">${cvBadge}</td>
       <td style="padding:7px 10px;text-align:center;font-size:11px">${d.lastDate || '—'}<div style="font-size:9px;color:var(--mu)">${d.lastMaMay !== '__unknown__' ? d.lastMaMay : '—'}</div></td>
-      <td style="padding:7px 10px;text-align:center;font-size:11px;font-family:var(--mono)">${d.lastGio > 0 ? d.lastGio + 'h' : '—'}</td>
-      <td style="padding:7px 10px;text-align:center;font-size:11px;font-family:var(--mono)">${d.machLatest > 0 ? d.machLatest + 'h' : '—'}</td>
+      <td style="padding:7px 10px;text-align:center;font-size:11px;font-family:var(--mono)">${d.lastGio > 0 ? formatHoursToDuration(d.lastGio) : '—'}</td>
+      <td style="padding:7px 10px;text-align:center;font-size:11px;font-family:var(--mono)">${d.machLatest > 0 ? formatHoursToDuration(d.machLatest) : '—'}</td>
       <td style="padding:7px 10px;text-align:center;font-size:11px;font-family:var(--mono)">${d.hoursUsed !== null ? d.hoursUsed + 'h' : '—'}</td>
       <td style="padding:7px 10px;text-align:center">${pctBar}</td>
       <td style="padding:7px 10px"><span class="b ${badgeCls}" style="font-size:10px;white-space:nowrap">${d.warnMsg}</span></td>
@@ -5255,9 +5433,19 @@ function lcExportXLSX() {
 
 function onSoGioVanHanhInput(inp) {
   if (!inp) return;
-  const v = parseFloat(inp.value);
+  const v = parseDurationToHours(inp.value);
   inp.style.borderColor = v > 0 ? 'var(--g)' : '';
   inp.style.background = v > 0 ? '#f0fdf4' : '';
+}
+function onSoGioVanHanhBlur(inp) {
+  if (!inp || !inp.value.trim()) return;
+  const v = parseDurationToHours(inp.value);
+  if (v > 0) {
+    // Hiển thị lại dưới dạng chuẩn HHH:MM:SS
+    inp.value = formatHoursToDuration(v);
+    inp.style.borderColor = 'var(--g)';
+    inp.style.background = '#f0fdf4';
+  }
 }
 
 // ═══ MACHINES ═══
@@ -6146,8 +6334,8 @@ async function syncReportGS(rep){
     p.pp||'',      // col18 PP Xử Lý
     ctxt(rep.cl),  // col19 Kết Luận
     rep.gc||'',    // col20 Ghi Chú
-    rep.soGioVanHanh||'', // col21 Số Giờ Vận Hành (legacy alias)
-    rep.soGioVanHanh||''  // col22 Số Giờ Đồng Hồ Máy
+    formatHoursToDuration(rep.soGioVanHanh)||'', // col21 Số Giờ Vận Hành (legacy alias)
+    formatHoursToDuration(rep.soGioVanHanh)||''  // col22 Số Giờ Đồng Hồ Máy
   ]);
   const d = await callGoogleAPI('write', {sheet:'5', rows});
   if(d&&d.ok){
@@ -6377,7 +6565,7 @@ async function pullSheet5(){
         note:C.noteExtra!==null?String(r[C.noteExtra]||'').trim():'',
         linkPdf:C.linkPdf!==null?String(r[C.linkPdf]||'').trim():'',
         linkWord:C.linkWord!==null?String(r[C.linkWord]||'').trim():'',
-        soGioVanHanh:C.soGioVanHanh!==null?parseFloat(String(r[C.soGioVanHanh]||'').trim())||0:0,
+        soGioVanHanh:C.soGioVanHanh!==null?parseDurationToHours(String(r[C.soGioVanHanh]||'').trim()):0,
         status:'submitted', cat:new Date().toISOString(),
         phen:[]
       };
@@ -6541,6 +6729,13 @@ let _lastPollTime = 0;
 function startPolling(){
   if(_pollingStarted) return; // Tránh tạo nhiều interval khi login/logout
   _pollingStarted = true;
+
+  // Mỗi 10 phút: cập nhật giờ hiện tại máy từ Sheet riêng
+  setInterval(() => {
+    fetchCurrentMachineHours().then(() => {
+      if (curPage === 'lifecycle') renderLifecycle();
+    }).catch(() => {});
+  }, 10 * 60 * 1000);
 
   // Mỗi 30s: kéo TOÀN BỘ dữ liệu từ Sheet về (không push) — dùng Promise.all để chạy song song
   setInterval(async()=>{
@@ -7156,9 +7351,7 @@ function pvBDSCBuildFastData_() {
     hienTuong: hienTuong.length ? hienTuong : (oldData.hienTuong || []),
     vatTu: vatTu.length ? vatTu : (oldData.vatTu || []),
     ktv: ktv.length ? ktv : (oldData.ktv || []),
-    vatTuCoDinh: (oldData.vatTuCoDinh && oldData.vatTuCoDinh.length)
-      ? oldData.vatTuCoDinh
-      : (function(){ try { var c=JSON.parse(localStorage.getItem('EGREEN_PV_APPDATA_CACHE_V15')||'{}'); return c.vatTuCoDinh||[]; } catch(e){ return []; } })(),
+    vatTuCoDinh: oldData.vatTuCoDinh || [],
     selected: oldData.selected || []
   };
 }
@@ -7175,12 +7368,9 @@ function pvBDSCSyncInBackground_() {
       PV.data = Object.assign({}, PV.data || {}, d, { selected });
       PV.user = d.currentUser || PV.user;
       pvBDSCRefreshFastData_(false);
-      // Luôn thêm vật tư cố định nếu chưa có (không chỉ khi selected rỗng)
       if (document.getElementById('pvb_formWrap')) {
-        const hasFixed = (PV.data.selected||[]).some(x=>x.fixed);
-        if (!hasFixed) {
-          pvBDSCAddFixed();
-        }
+        // Luôn add fixed sau sync kể cả khi selected có rồi (để không bỏ sót cố định mới load về)
+        pvBDSCAddFixed();
         pvBDSCRenderVatTuSearch();
         pvBDSCRenderSelected();
       }
@@ -7247,11 +7437,8 @@ async function pvBDSCInit(view) {
 
   PV.token = CU.pvToken || CU.token || '';
   PV.user = CU.pvUser || { username: CU.u, fullName: CU.name, role: CU.role, status: CU.status || 'active' };
-  const needRebuild = !_pvBDSCReady || !PV.data || !PV.data.may || !PV.data.may.length;
-  const missingFixed = !needRebuild && (!PV.data.vatTuCoDinh || !PV.data.vatTuCoDinh.length);
-  if (needRebuild || missingFixed) {
-    const prev = PV.data || {};
-    PV.data = Object.assign({ selected: prev.selected || [] }, pvBDSCBuildFastData_());
+  if (!_pvBDSCReady || !PV.data || !PV.data.may || !PV.data.may.length) {
+    PV.data = Object.assign({ selected: [] }, pvBDSCBuildFastData_());
     _pvBDSCReady = true;
   } else {
     pvBDSCRefreshFastData_(false);
@@ -7301,8 +7488,6 @@ function pvBDSCRenderForm() {
   // Reset selection state for a clean form
   PV.data.selected = []; PV.members = []; PV.hienTuongSel = []; PV.editing = '';
   _pvbTVSelected = [];
-  // Reset background sync flag để sync lại khi vào form mới
-  _pvBDSCBackgroundSyncStarted = false;
   root.innerHTML = pvBDSCBuildFormHTML();
   // Post-render setup
   const dt = new Date(); dt.setMinutes(dt.getMinutes() - dt.getTimezoneOffset());
@@ -7316,6 +7501,22 @@ function pvBDSCRenderForm() {
   // Nav highlight
   document.querySelectorAll('.nitem').forEach(x=>x.classList.remove('on'));
   const ni = document.getElementById('ni-taoPhieu'); if(ni) ni.classList.add('on');
+  // Retry: nếu vatTuCoDinh chưa load về (background sync chưa xong) → thử lại sau 600ms & 1500ms
+  const _retryFixed = () => {
+    if (!document.getElementById('pvb_formWrap')) return; // form đã đóng
+    const wasBefore = (PV.data.selected||[]).filter(x=>x.fixed).length;
+    pvBDSCAddFixed();
+    pvBDSCRenderSelected();
+    const nowFixed = (PV.data.selected||[]).filter(x=>x.fixed).length;
+    // Cập nhật indicator
+    const fixedBox = document.getElementById('pvb_selectedItems');
+    if(fixedBox && (PV.data.vatTuCoDinh||[]).length > 0 && nowFixed > wasBefore) {
+      pvBDSCRenderVatTuSearch();
+    }
+  };
+  setTimeout(_retryFixed, 600);
+  setTimeout(_retryFixed, 1500);
+  setTimeout(_retryFixed, 3000);
 }
 
 function pvBDSCBuildFormHTML() {
