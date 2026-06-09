@@ -7501,22 +7501,6 @@ function pvBDSCRenderForm() {
   // Nav highlight
   document.querySelectorAll('.nitem').forEach(x=>x.classList.remove('on'));
   const ni = document.getElementById('ni-taoPhieu'); if(ni) ni.classList.add('on');
-  // Retry: nếu vatTuCoDinh chưa load về (background sync chưa xong) → thử lại sau 600ms & 1500ms
-  const _retryFixed = () => {
-    if (!document.getElementById('pvb_formWrap')) return; // form đã đóng
-    const wasBefore = (PV.data.selected||[]).filter(x=>x.fixed).length;
-    pvBDSCAddFixed();
-    pvBDSCRenderSelected();
-    const nowFixed = (PV.data.selected||[]).filter(x=>x.fixed).length;
-    // Cập nhật indicator
-    const fixedBox = document.getElementById('pvb_selectedItems');
-    if(fixedBox && (PV.data.vatTuCoDinh||[]).length > 0 && nowFixed > wasBefore) {
-      pvBDSCRenderVatTuSearch();
-    }
-  };
-  setTimeout(_retryFixed, 600);
-  setTimeout(_retryFixed, 1500);
-  setTimeout(_retryFixed, 3000);
 }
 
 function pvBDSCBuildFormHTML() {
@@ -10721,16 +10705,16 @@ nav=function(p){
 </style>
 <script id="v29-auth-state-guard-js">
 (function(){
+  // v29 exposeGlobal fixed: getter cũ dùng Function() tự gọi lại chính nó → stack overflow
+  // Fix: không dùng Object.defineProperty với getter đệ quy
+  // Chỉ đảm bảo window.X trỏ đúng biến global, không cần getter phức tạp
   function exposeGlobal(name){
     try{
-      Object.defineProperty(window, name, {
-        configurable:true,
-        get:function(){ return Function('return typeof '+name+'!=="undefined"?'+name+':undefined')(); },
-        set:function(v){ Function('v', name+'=v;')(v); }
-      });
-    }catch(e){
-      try{ window[name] = Function('return typeof '+name+'!=="undefined"?'+name+':undefined')(); }catch(_e){}
-    }
+      // Chỉ gán nếu chưa có hoặc là undefined
+      if(typeof window[name]==='undefined'){
+        try{ window[name]=undefined; }catch(_){}
+      }
+    }catch(e){}
   }
   ['CU','PV','USERS','curPage'].forEach(exposeGlobal);
 
