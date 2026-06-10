@@ -11416,57 +11416,54 @@ nav=function(p){
 <script>
 /* ═══════════════════════════════════════════════════════════
  * PATCH: Vật tư cố định tĩnh + dropdown chọn loại
- * Chỉ một block này, không sửa code gốc nào.
  * ═══════════════════════════════════════════════════════════ */
 (function() {
 
-  /* 1. Dữ liệu tĩnh từ Sheet 9. Vật tư cố định */
   var FIXED_DATA = [
-    {cum:'Công cụ, thiết bị',    ten:'Bộ khẩu (8-32 - có khẩu tuýp 16)',      loai:[]},
-    {cum:'Công cụ, thiết bị',    ten:'Bộ cờ lê (8-32)',                         loai:[]},
-    {cum:'Công cụ, thiết bị',    ten:'Tua vít 2 cạnh, 4 cạnh (to, nhỏ)',        loai:[]},
-    {cum:'Công cụ, thiết bị',    ten:'Bộ lục lăng',                             loai:[]},
-    {cum:'Công cụ, thiết bị',    ten:'Đồng hồ đo điện',                         loai:[]},
-    {cum:'Công cụ, thiết bị',    ten:'Đồng hồ đo xung Hantek',                  loai:[]},
-    {cum:'Công cụ, thiết bị',    ten:'Máy nội soi',                             loai:[]},
-    {cum:'Công cụ, thiết bị',    ten:'Máy cắt cầm tay',                         loai:[]},
-    {cum:'Công cụ, thiết bị',    ten:'Bộ súng pin',                             loai:[]},
-    {cum:'Công cụ, thiết bị',    ten:'Đồng hồ đo áp suất buồng đốt',           loai:[]},
-    {cum:'Công cụ, thiết bị',    ten:'Đồng hồ đo áp suất nhớt cơ',             loai:[]},
-    {cum:'Công cụ, thiết bị',    ten:'Bộ đột gioăng',                           loai:[]},
-    {cum:'Công cụ, thiết bị',    ten:'Kìm tuốt, bóp cos dây điện',              loai:[]},
-    {cum:'Công cụ, thiết bị',    ten:'Bộ cos các loại',                          loai:[]},
-    {cum:'Điều khiển động lực',  ten:'Relay trung gian 24VDC 10A 8 chân',       loai:[]},
-    {cum:'Điều khiển động lực',  ten:'Đế Relay trung gian 24VDC 10A 8 chân',    loai:[]},
-    {cum:'Nguồn DC',             ten:'Công tắc xoay',                            loai:[]},
-    {cum:'Hệ thống đánh lửa',   ten:'Bugi',                                     loai:['BKR6E','DCPR8E','Mar10A-J 4706','BP6ES']},
-    {cum:'Hệ thống đánh lửa',   ten:'Bobin',                                    loai:[]},
-    {cum:'Hệ thống đánh lửa',   ten:'Giắc bobin',                               loai:[]},
-    {cum:'Hệ thống đánh lửa',   ten:'Núm cao su',                               loai:[]},
-    {cum:'Hệ thống đánh lửa',   ten:'Long đen nhôm',                            loai:[]},
-    {cum:'Hệ thống đánh lửa',   ten:'Mạch đánh lửa',                            loai:[]},
-    {cum:'Hệ thống đánh lửa',   ten:'Cảm biến đánh lửa (tiệm cận Pr08-2dp)',   loai:[]},
-    {cum:'Hệ thống đánh lửa',   ten:'Mạch hạ áp 24VDC-12VDC 30A',              loai:[]},
-    {cum:'Cảm biến / tín hiệu', ten:'Cảm biến nước',                            loai:[]},
-    {cum:'Cảm biến / tín hiệu', ten:'Cảm biến nhớt',                            loai:[]},
-    {cum:'Điều tốc / điều khiển tải', ten:'Pickup',                             loai:[]},
-    {cum:'Điều tốc / điều khiển tải', ten:'Rotuyn',                             loai:[]},
-    {cum:'Nguồn điện 3 pha',    ten:'AVR SX440',                                loai:[]},
-    {cum:'Hệ thống khởi động',  ten:'Relay đề',                                 loai:[]},
-    {cum:'Hệ thống khởi động',  ten:'Relay thời gian 24VDC 10A 8 chân',        loai:[]},
-    {cum:'Hệ thống khởi động',  ten:'Đế relay thời gian 24VDC 10A 8 chân',     loai:[]},
-    {cum:'Hệ thống nạp, xả, tăng áp', ten:'Bầu lọc gió / Cụm lọc gió',        loai:['LỌC GIÓ 6D105(AS1024)','A-6465A (Nitco)','A-6117-S','Lọc gió A6117S','Lọc gió Donaldson P532473','P831197']},
-    {cum:'Hệ thống nạp, xả, tăng áp', ten:'Đế relay trung gian 8 chân',        loai:[]},
-    {cum:'Hệ thống bôi trơn',   ten:'Lưới lọc thô các-te (Phao lọc nhớt)',     loai:[]},
-    {cum:'Hệ thống bôi trơn',   ten:'Lọc nhớt 1',                               loai:['C-5602','T-5121','LF9009','Sakura O-18051','WF2072','Sakura O-1808','Sakura O-1809','Sakura O-1804','Sakura O-1806']},
-    {cum:'Hệ thống bôi trơn',   ten:'Lọc nhớt 2',                               loai:['C-5602','T-5121','LF9009','Sakura O-18051','WF2072','Sakura O-1808','Sakura O-1809','Sakura O-1804','Sakura O-1806']},
-    {cum:'Vật tư, chi tiết máy', ten:'Dây đồng 1x1.0',                          loai:[]},
-    {cum:'Vật tư, chi tiết máy', ten:'Dây đồng 1x2.5',                          loai:[]},
-    {cum:'Vật tư, chi tiết máy', ten:'Băng dính điện',                           loai:[]},
-    {cum:'Vật tư, chi tiết máy', ten:'Bìa amiang',                               loai:[]},
+    {cum:'Công cụ, thiết bị',    ten:'Bộ khẩu (8-32 - có khẩu tuýp 16)',           loai:[]},
+    {cum:'Công cụ, thiết bị',    ten:'Bộ cờ lê (8-32)',                              loai:[]},
+    {cum:'Công cụ, thiết bị',    ten:'Tua vít 2 cạnh, 4 cạnh (to, nhỏ)',             loai:[]},
+    {cum:'Công cụ, thiết bị',    ten:'Bộ lục lăng',                                  loai:[]},
+    {cum:'Công cụ, thiết bị',    ten:'Đồng hồ đo điện',                              loai:[]},
+    {cum:'Công cụ, thiết bị',    ten:'Đồng hồ đo xung Hantek',                       loai:[]},
+    {cum:'Công cụ, thiết bị',    ten:'Máy nội soi',                                  loai:[]},
+    {cum:'Công cụ, thiết bị',    ten:'Máy cắt cầm tay',                              loai:[]},
+    {cum:'Công cụ, thiết bị',    ten:'Bộ súng pin',                                  loai:[]},
+    {cum:'Công cụ, thiết bị',    ten:'Đồng hồ đo áp suất buồng đốt',                loai:[]},
+    {cum:'Công cụ, thiết bị',    ten:'Đồng hồ đo áp suất nhớt cơ',                  loai:[]},
+    {cum:'Công cụ, thiết bị',    ten:'Bộ đột gioăng',                                loai:[]},
+    {cum:'Công cụ, thiết bị',    ten:'Kìm tuốt, bóp cos dây điện',                   loai:[]},
+    {cum:'Công cụ, thiết bị',    ten:'Bộ cos các loại',                               loai:[]},
+    {cum:'Điều khiển động lực',  ten:'Relay trung gian 24VDC 10A 8 chân',            loai:[]},
+    {cum:'Điều khiển động lực',  ten:'Đế Relay trung gian 24VDC 10A 8 chân',         loai:[]},
+    {cum:'Nguồn DC',             ten:'Công tắc xoay',                                 loai:[]},
+    {cum:'Hệ thống đánh lửa',   ten:'Bugi',                                          loai:['BKR6E','DCPR8E','Mar10A-J 4706','BP6ES']},
+    {cum:'Hệ thống đánh lửa',   ten:'Bobin',                                         loai:[]},
+    {cum:'Hệ thống đánh lửa',   ten:'Giắc bobin',                                    loai:[]},
+    {cum:'Hệ thống đánh lửa',   ten:'Núm cao su',                                    loai:[]},
+    {cum:'Hệ thống đánh lửa',   ten:'Long đen nhôm',                                 loai:[]},
+    {cum:'Hệ thống đánh lửa',   ten:'Mạch đánh lửa',                                 loai:[]},
+    {cum:'Hệ thống đánh lửa',   ten:'Cảm biến đánh lửa (tiệm cận Pr08-2dp)',        loai:[]},
+    {cum:'Hệ thống đánh lửa',   ten:'Mạch hạ áp 24VDC-12VDC 30A',                   loai:[]},
+    {cum:'Cảm biến / tín hiệu', ten:'Cảm biến nước',                                 loai:[]},
+    {cum:'Cảm biến / tín hiệu', ten:'Cảm biến nhớt',                                 loai:[]},
+    {cum:'Điều tốc / điều khiển tải', ten:'Pickup',                                  loai:[]},
+    {cum:'Điều tốc / điều khiển tải', ten:'Rotuyn',                                  loai:[]},
+    {cum:'Nguồn điện 3 pha',    ten:'AVR SX440',                                      loai:[]},
+    {cum:'Hệ thống khởi động',  ten:'Relay đề',                                       loai:[]},
+    {cum:'Hệ thống khởi động',  ten:'Relay thời gian 24VDC 10A 8 chân',              loai:[]},
+    {cum:'Hệ thống khởi động',  ten:'Đế relay thời gian 24VDC 10A 8 chân',           loai:[]},
+    {cum:'Hệ thống nạp, xả, tăng áp', ten:'Bầu lọc gió / Cụm lọc gió',             loai:['LỌC GIÓ 6D105(AS1024)','A-6465A (Nitco)','A-6117-S','Lọc gió A6117S','Lọc gió Donaldson P532473','P831197']},
+    {cum:'Hệ thống nạp, xả, tăng áp', ten:'Đế relay trung gian 8 chân',             loai:[]},
+    {cum:'Hệ thống bôi trơn',   ten:'Lưới lọc thô các-te (Phao lọc nhớt)',          loai:[]},
+    {cum:'Hệ thống bôi trơn',   ten:'Lọc nhớt 1',                                    loai:['C-5602','T-5121','LF9009','Sakura O-18051','WF2072','Sakura O-1808','Sakura O-1809','Sakura O-1804','Sakura O-1806']},
+    {cum:'Hệ thống bôi trơn',   ten:'Lọc nhớt 2',                                    loai:['C-5602','T-5121','LF9009','Sakura O-18051','WF2072','Sakura O-1808','Sakura O-1809','Sakura O-1804','Sakura O-1806']},
+    {cum:'Vật tư, chi tiết máy', ten:'Dây đồng 1x1.0',                               loai:[]},
+    {cum:'Vật tư, chi tiết máy', ten:'Dây đồng 1x2.5',                               loai:[]},
+    {cum:'Vật tư, chi tiết máy', ten:'Băng dính điện',                                loai:[]},
+    {cum:'Vật tư, chi tiết máy', ten:'Bìa amiang',                                    loai:[]},
   ];
 
-  /* Chuyển sang format tương thích với vatTuCoDinh từ API */
   function buildStaticCoDinh() {
     return FIXED_DATA.map(function(x) {
       return {
@@ -11478,7 +11475,7 @@ nav=function(p){
     });
   }
 
-  /* Đảm bảo PV.data.vatTuCoDinh luôn có dữ liệu tĩnh */
+  /* Inject dữ liệu tĩnh vào PV.data.vatTuCoDinh nếu chưa có */
   function ensureStaticCoDinh() {
     if (window.PV && window.PV.data) {
       if (!PV.data.vatTuCoDinh || !PV.data.vatTuCoDinh.length) {
@@ -11487,101 +11484,25 @@ nav=function(p){
     }
   }
 
-  /* 2. Override pvBDSCAddFixed — inject tĩnh rồi gọi logic gốc */
-  var _origAddFixed = null;
+  /* Bọc pvBDSCAddFixed: inject tĩnh trước, gọi hàm gốc sau */
   function installAddFixed() {
-    if (typeof window.pvBDSCAddFixed === 'function' && window.pvBDSCAddFixed._patched) return;
-    _origAddFixed = window.pvBDSCAddFixed;
+    if (typeof window.pvBDSCAddFixed !== 'function') return;
+    if (window.pvBDSCAddFixed._patched) return;
+    var orig = window.pvBDSCAddFixed;
     window.pvBDSCAddFixed = function() {
       ensureStaticCoDinh();
-      if (typeof _origAddFixed === 'function') _origAddFixed();
+      orig();
     };
     window.pvBDSCAddFixed._patched = true;
   }
 
-  /* 3. Hàm tạo dropdown loại cho item đã chọn */
-  function loaiDropdownHTML(x) {
-    if (!window.PV || !PV.data) return '';
-    var fixedRef = (PV.data.vatTuCoDinh || []).find(function(v) {
-      return (v['Tên Chi Tiết / Linh Kiện Thay Thế'] || '') === x.tenVatTu;
-    });
-    var loai = fixedRef && fixedRef._loaiArr && fixedRef._loaiArr.length ? fixedRef._loaiArr : null;
-    if (!loai) return '';
-    var cur = x.loaiChon || x.loaiVatTu || x.maVatTu || '';
-    var id = (x.id || '').replace(/['"\\]/g, '');
-    var opts = '<option value="">-- Chọn loại --</option>' +
-      loai.map(function(l) {
-        var sel = l === cur ? ' selected' : '';
-        return '<option value="' + pvEsc(l) + '"' + sel + '>' + pvEsc(l) + '</option>';
-      }).join('');
-    return '<select title="Chọn loại" ' +
-      'style="border:1.5px solid var(--g);border-radius:6px;padding:3px 5px;font-size:11px;color:var(--g);flex-shrink:0;max-width:140px" ' +
-      'onchange="pvPatchUpdLoai(\'' + id + '\',this.value)">' + opts + '</select>';
-  }
-
-  /* Hàm cập nhật loại khi chọn dropdown */
-  window.pvPatchUpdLoai = function(id, loai) {
-    if (!window.PV || !PV.data) return;
-    var it = (PV.data.selected || []).find(function(x) { return x.id === id; });
-    if (!it) return;
-    it.loaiChon = loai;
-    it.loaiVatTu = loai;
-    it.maVatTu = loai;
-  };
-
-  /* 4. Override pvBDSCRenderSelected — bọc output gốc, gắn thêm dropdown */
-  var _origRenderSelected = null;
-  function installRenderSelected() {
-    if (typeof window.pvBDSCRenderSelected === 'function' && window.pvBDSCRenderSelected._patched) return;
-    _origRenderSelected = window.pvBDSCRenderSelected;
-    window.pvBDSCRenderSelected = function() {
-      /* Gọi hàm gốc để render xong */
-      if (typeof _origRenderSelected === 'function') _origRenderSelected();
-      /* Sau đó gắn dropdown loại vào mỗi dòng đã render */
-      var box = document.getElementById('pvb_selectedItems');
-      if (!box || !window.PV || !PV.data) return;
-      var rows = box.querySelectorAll('div[style*="border-radius:8px"]');
-      (PV.data.selected || []).forEach(function(x, i) {
-        var row = rows[i];
-        if (!row) return;
-        /* Nếu đã có dropdown rồi thì bỏ qua */
-        if (row.querySelector('select[onchange*="pvPatchUpdLoai"]')) return;
-        var dd = loaiDropdownHTML(x);
-        if (!dd) return;
-        /* Chèn dropdown sau phần tên (div đầu tiên trong row) */
-        var nameDiv = row.querySelector('div');
-        if (nameDiv && nameDiv.nextSibling) {
-          var tmp = document.createElement('div');
-          tmp.innerHTML = dd;
-          row.insertBefore(tmp.firstChild, nameDiv.nextSibling);
-        }
-      });
-    };
-    window.pvBDSCRenderSelected._patched = true;
-  }
-
-  /* 5. Cài patch ngay khi DOM sẵn sàng, và re-cài nếu các version mới override lại */
-  function applyPatches() {
-    ensureStaticCoDinh();
-    installAddFixed();
-    installRenderSelected();
-  }
-
-  /* Chạy ngay */
+  /* Chạy ngay và poll 300ms để bắt các override muộn (pv17, pv26...) */
+  function applyPatches() { ensureStaticCoDinh(); installAddFixed(); }
   applyPatches();
-
-  /* Chạy lại sau mỗi navigation/render để bắt các override muộn (pv17, pv26...) */
-  var _patchInterval = setInterval(function() {
-    if (typeof window.pvBDSCAddFixed === 'function' && !window.pvBDSCAddFixed._patched) {
-      installAddFixed();
-    }
-    if (typeof window.pvBDSCRenderSelected === 'function' && !window.pvBDSCRenderSelected._patched) {
-      installRenderSelected();
-    }
+  var t = setInterval(function() {
+    if (window.pvBDSCAddFixed && !window.pvBDSCAddFixed._patched) installAddFixed();
   }, 300);
-
-  /* Dừng interval sau 30 giây (đã load xong hết) */
-  setTimeout(function() { clearInterval(_patchInterval); }, 30000);
+  setTimeout(function() { clearInterval(t); }, 30000);
 
 })();
 </script>
