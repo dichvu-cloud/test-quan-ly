@@ -1866,7 +1866,7 @@ function sumReportsSL(reports, type, mode){
   localStorage.setItem('eg_users', JSON.stringify(stored));
 })();
 
-let CU=null, curPage='dash', repFilter='all', machFilter='all';
+var CU=null, curPage='dash', repFilter='all', machFilter='all';
 let phenCount=0, curConclusion='', curPartTarget=null;
 let anPeriod='month', charts={};
 // GS_URL cố định theo API_URL, không nhập/kết nối trong giao diện nữa
@@ -2027,18 +2027,19 @@ function clearBDSCSession(){
 }
 function restoreBDSCSession(){
   try{
-    // Ưu tiên localStorage (lưu lâu dài), fallback sessionStorage (chỉ tab hiện tại)
     const raw = localStorage.getItem(BDSC_SESSION_KEY) || sessionStorage.getItem(BDSC_SESSION_KEY);
     if(!raw) return false;
     const obj=JSON.parse(raw);
     if(!obj||!obj.user) return false;
-    // Phiếu vật tư không còn dùng token riêng. Chỉ chặn session quá cũ khác version.
     if(obj.version!==BDSC_SESSION_VERSION){
       clearBDSCSession();
       return false;
     }
     CU={...obj.user,active:true};
-    showApp();
+    // Gọi showApp nếu có (render UI chính)
+    if(typeof showApp==='function') showApp();
+    // Đảm bảo syncAuthUI cũng được gọi kể cả khi showApp chưa được wrap bởi V29
+    if(typeof syncBDSCAuthUI==='function') syncBDSCAuthUI(true);
     return true;
   }catch(e){clearBDSCSession();return false;}
 }
@@ -10860,22 +10861,16 @@ nav=function(p){
 
   function bootAuthGuard(){
     // Phải restore session TRƯỚC rồi mới sync UI
-    // Nếu chạy syncAuthUI trước khi restoreBDSCSession thì CU vẫn null → bị logout
-    function restoreAndSync(){
-      if(!window.CU && typeof window.restoreBDSCSession === 'function'){
-        window.restoreBDSCSession();
-      }
-      syncAuthUI(!!window.CU);
+    // CU là var toàn cục nên window.CU === CU
+    if(!window.CU && typeof window.restoreBDSCSession === 'function'){
+      window.restoreBDSCSession();
     }
-    // Gọi ngay (sync) để tránh nháy màn hình
-    restoreAndSync();
-    // Gọi lại sau một chút phòng trường hợp DOM chưa sẵn sàng
-    setTimeout(restoreAndSync, 100);
-    setTimeout(restoreAndSync, 400);
+    syncAuthUI(!!window.CU);
   }
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bootAuthGuard);
   else bootAuthGuard();
-  window.addEventListener('load', bootAuthGuard);
+  // Dùng once:true để event load không ghi đè session đã restore
+  window.addEventListener('load', bootAuthGuard, {once:true});
 })();
 </script>
 
