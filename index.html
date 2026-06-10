@@ -1654,7 +1654,7 @@ tbody tr{border-bottom:1px solid #f1f5f9;transition:.1s}tbody tr:hover{backgroun
   <div class="modal wide">
     <div class="mh"><div><h2 id="partMTitle">🔧 Chọn linh kiện</h2><p>Theo cụm đã chọn · Tích chọn linh kiện → Chọn loại hình xử lý (1 trong 3)</p></div><button class="mcl" onclick="closeOv('ov-part')">✕</button></div>
     <div class="mb" id="partPickerBody"></div>
-    <div class="mf"><button class="btn bg-g" onclick="confirmParts()">✓ Xác nhận</button><button class="btn bg-gr" onclick="closeOv('ov-part')">Đóng</button></div>
+    <div class="mf"><button class="btn bg-g" onclick="autoSaveParts();closeOv('ov-part')">✓ Đóng & Lưu</button></div>
   </div>
 </div>
 
@@ -2787,15 +2787,15 @@ function openPartPicker(idx){
         ${(PARTS_MAP[cum]||[]).map(p=>{const k=cum+'__'+p,ex=existing[k];return `
           <div class="pi-row${ex?' checked':''}" id="pir-${btoa(unescape(encodeURIComponent(k))).replace(/[^a-zA-Z0-9]/g,'')}">
             <input type="checkbox" class="pi-check" id="pc-${btoa(unescape(encodeURIComponent(k))).replace(/[^a-zA-Z0-9]/g,'')}" ${ex?'checked':''}
-              onchange="this.closest('.pi-row').classList.toggle('checked',this.checked)">
+              onchange="this.closest('.pi-row').classList.toggle('checked',this.checked);autoSaveParts()">
             <label class="pi-name" for="pc-${btoa(unescape(encodeURIComponent(k))).replace(/[^a-zA-Z0-9]/g,'')}">${p}</label>
             <div class="pi-acts">
-              <span class="pa${ex&&ex.loai==='Thay thế'?' rep':''}" onclick="selPA(this,'rep')">Thay thế</span>
-              <span class="pa${ex&&ex.loai==='Sửa chữa'?' fix':''}" onclick="selPA(this,'fix')">Sửa chữa</span>
-              <span class="pa${ex&&ex.loai==='Bảo dưỡng'?' cln':''}" onclick="selPA(this,'cln')">Bảo dưỡng</span>
+              <span class="pa${ex&&ex.loai==='Thay thế'?' rep':''}" onclick="selPA(this,'rep');autoSaveParts()">Thay thế</span>
+              <span class="pa${ex&&ex.loai==='Sửa chữa'?' fix':''}" onclick="selPA(this,'fix');autoSaveParts()">Sửa chữa</span>
+              <span class="pa${ex&&ex.loai==='Bảo dưỡng'?' cln':''}" onclick="selPA(this,'cln');autoSaveParts()">Bảo dưỡng</span>
             </div>
-            <input type="number" class="pi-qty" min="1" value="${ex&&ex.sl?ex.sl:1}" placeholder="SL" title="Số lượng">
-            <input type="text" class="pi-gc" placeholder="Ghi chú..." title="Ghi chú cho linh kiện này" value="${ex&&ex.gc?ex.gc:''}" style="border:1.5px solid var(--bd);border-radius:6px;padding:2px 6px;font-size:11px;font-family:var(--font);outline:none;min-width:90px;max-width:130px;background:#fff;color:var(--s)" onfocus="this.style.borderColor='var(--g)'" onblur="this.style.borderColor='var(--bd)'">
+            <input type="number" class="pi-qty" min="1" value="${ex&&ex.sl?ex.sl:1}" placeholder="SL" title="Số lượng" oninput="autoSaveParts()">
+            <input type="text" class="pi-gc" placeholder="Ghi chú..." title="Ghi chú cho linh kiện này" value="${ex&&ex.gc?ex.gc:''}" style="border:1.5px solid var(--bd);border-radius:6px;padding:2px 6px;font-size:11px;font-family:var(--font);outline:none;min-width:90px;max-width:130px;background:#fff;color:var(--s)" onfocus="this.style.borderColor='var(--g)'" onblur="this.style.borderColor='var(--bd)'" oninput="autoSaveParts()">
           </div>`;}).join('')}
         <div style="display:flex;gap:6px;margin-top:4px">
           <input class="inp" id="np-${cum}" placeholder="Thêm linh kiện mới..." style="flex:1">
@@ -2828,9 +2828,39 @@ function addCustomPart(cum){
     <input type="number" class="pi-qty" min="1" value="1" placeholder="SL" title="Số lượng">
     <input type="text" class="pi-gc" placeholder="Ghi chú..." title="Ghi chú cho linh kiện này" style="border:1.5px solid var(--bd);border-radius:6px;padding:2px 6px;font-size:11px;font-family:var(--font);outline:none;min-width:90px;max-width:130px;background:#fff" onfocus="this.style.borderColor='var(--g)'" onblur="this.style.borderColor='var(--bd)'">`;
   cont.insertBefore(newRow,inp.parentElement);toast(`✅ Đã thêm: ${v}`,'ok');
+  autoSaveParts();
   syncSheet('4');
 }
 
+
+function autoSaveParts(){
+  const sel={};
+  document.querySelectorAll('#partPickerBody .pi-row').forEach(row=>{
+    const cb=row.querySelector('input[type=checkbox]');if(!cb||!cb.checked)return;
+    const lbl=row.querySelector('.pi-name');if(!lbl)return;
+    const name=lbl.textContent.trim();
+    const act=row.querySelector('.pa.rep,.pa.fix,.pa.cln');
+    const loai=act?({rep:'Thay thế',fix:'Sửa chữa',cln:'Bảo dưỡng'}[act.classList[1]]||'Thay thế'):'Thay thế';
+    const qtyInp=row.querySelector('input[type=number]');
+    const sl=qtyInp?Math.max(1,parseInt(qtyInp.value)||1):1;
+    const gcInp=row.querySelector('.pi-gc');const lkGc=gcInp?gcInp.value.trim():'';
+    sel[name]={loai,sl,gc:lkGc};
+  });
+  if(curPartTarget===undefined&&curPartTarget===null) return;
+  const disp=document.getElementById(`ph-parts-${curPartTarget}`);
+  if(!disp) return;
+  const items=Object.entries(sel);
+  disp.dataset.parts=JSON.stringify(sel);
+  if(!items.length){
+    disp.innerHTML='';
+  } else {
+    disp.innerHTML=items.map(([lk,obj])=>`<div style="display:flex;align-items:center;gap:5px;margin-bottom:4px;flex-wrap:wrap">
+      <span style="font-size:11px;font-weight:600">${lk}</span>
+      <span class="b ${obj.loai==='Thay thế'?'br':obj.loai==='Sửa chữa'?'ba':'bb'}">${obj.loai}</span>
+      <span style="font-size:10px;font-family:var(--mono);background:#f1f5f9;color:#475569;padding:1px 6px;border-radius:4px">x${obj.sl}</span>
+    </div>`).join('');
+  }
+}
 
 function confirmParts(){
   const sel={};
@@ -7449,6 +7479,11 @@ async function pvBDSCInit(view) {
   const rootId = view === 'form' ? 'pvFormRoot' : 'pvHistoryRoot';
   const root = document.getElementById(rootId);
 
+  // Nếu CU chưa có, thử restore từ localStorage trước khi báo lỗi
+  if (!CU && typeof restoreBDSCSession === 'function') {
+    restoreBDSCSession();
+  }
+
   if (!CU) {
     if (root) root.innerHTML = '<div class="card"><div class="cb" style="color:#991b1b;font-weight:700">Bạn chưa đăng nhập hệ thống BDSC.</div><div style="margin-top:12px"><button class="btn good" onclick="logout()">Đăng nhập lại</button></div></div>';
     return;
@@ -11317,8 +11352,14 @@ nav=function(p){
     var cell=phatSinh?phatSinhCellHTML(x):lockedCellHTML(x);
     var loaiDong=phatSinh?'Phát sinh':first(x.loaiDong,'Chuẩn bị');
     var slXuat=phatSinh?'<input type="number" min="0" value="'+esc(String(sx))+'" data-k="soLuongXuatKho">':'<input class="pv31-locked-input" type="number" min="0" value="'+esc(String(sx))+'" data-k="soLuongXuatKho" readonly tabindex="-1" title="Số lượng xuất kho lấy từ phiếu xuất vật tư">';
-    return '<tr data-pv31-origin="'+(phatSinh?'phat-sinh':'phieu-xuat')+'"><td style="text-align:center">'+(i+1)+'</td><td>'+cell+'</td><td>'+slXuat+'</td><td><input type="number" min="0" value="'+esc(String(first(x.soLuongSuDung,x['Số lượng sử dụng'])))+'" data-k="soLuongSuDung"></td><td><input type="number" min="0" value="'+esc(String(first(x.soLuongNhapKho,x['Số lượng nhập kho'])))+'" data-k="soLuongNhapKho"></td><td><select data-k="tinhTrangNhapKho">'+['','Mới','Cũ','Tốt','Hỏng'].map(function(s){return '<option '+(s===first(x.tinhTrangNhapKho,x['Tình trạng nhập kho'])?'selected':'')+'>'+s+'</option>';}).join('')+'</select></td><td><input value="'+esc(first(x.ghiChu,x['Ghi chú']))+'" data-k="ghiChu"></td><td><span class="pv31-lock-badge">'+esc(loaiDong)+'</span></td></tr>';
+    var boBtn=phatSinh?'<td style="text-align:center"><button type="button" style="background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;border-radius:6px;padding:2px 10px;font-size:11px;font-weight:700;cursor:pointer" onclick="this.closest(\'tr\').remove();pv31RenumberRows()">Bỏ</button></td>':'<td></td>';
+    return '<tr data-pv31-origin="'+(phatSinh?'phat-sinh':'phieu-xuat')+'"><td style="text-align:center" class="pv31-stt">'+(i+1)+'</td><td>'+cell+'</td><td>'+slXuat+'</td><td><input type="number" min="0" value="'+esc(String(first(x.soLuongSuDung,x['Số lượng sử dụng'])))+'" data-k="soLuongSuDung"></td><td><input type="number" min="0" value="'+esc(String(first(x.soLuongNhapKho,x['Số lượng nhập kho'])))+'" data-k="soLuongNhapKho"></td><td><select data-k="tinhTrangNhapKho">'+['','Mới','Cũ','Tốt','Hỏng'].map(function(s){return '<option '+(s===first(x.tinhTrangNhapKho,x['Tình trạng nhập kho'])?'selected':'')+'>'+s+'</option>';}).join('')+'</select></td><td><input value="'+esc(first(x.ghiChu,x['Ghi chú']))+'" data-k="ghiChu"></td><td><span class="pv31-lock-badge">'+esc(loaiDong)+'</span></td>'+boBtn+'</tr>';
   }
+
+  window.pv31RenumberRows=function(){
+    var rows=document.querySelectorAll('#pv18_complete_table tbody tr,#pv17_complete_table tbody tr,#pv16_complete_table tbody tr');
+    rows.forEach(function(tr,i){var td=tr.querySelector('.pv31-stt');if(td)td.textContent=i+1;});
+  };
 
   window.pv17CompleteRowHTML=completeRowHTML;
   window.pv16CompleteRowHTML=completeRowHTML;
@@ -11348,7 +11389,7 @@ nav=function(p){
     var dt=new Date(); dt.setMinutes(dt.getMinutes()-dt.getTimezoneOffset());
     var selectedNguoi=(phieu&&phieu.nguoiNhapKho)||((typeof CU!=='undefined'&&CU&&(CU.name||CU.fullName))||'');
     var peopleCtl=(typeof pv19PeopleOptionsHTML==='function')?('<select class="inp" id="pv17_nguoiNhap">'+pv19PeopleOptionsHTML(selectedNguoi)+'</select>'):('<input class="inp" id="pv17_nguoiNhap" value="'+esc(selectedNguoi)+'" placeholder="Gõ tên người nhập kho...">');
-    root.innerHTML='<div class="card"><div class="cb pv18-form-head" style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><div><b>Cập nhật hoàn thành phiếu: '+esc(phieu&&phieu.maPhieu)+'</b><div class="pv17-small">'+esc((phieu&&(phieu.danhSachMaMay||phieu.maMay))||'')+' · '+esc((phieu&&(phieu.danhSachTenTrai||phieu.tenTrai))||'')+'</div></div><button class="btn sm" onclick="pv17RenderCompletePage()">← Quay lại</button></div><div class="pv18-form-grid"><div class="iw"><div class="il">Ngày giờ nhập kho *</div><input class="inp" type="datetime-local" id="pv17_ngayNhap" value="'+dt.toISOString().slice(0,16)+'"></div><div class="iw"><div class="il">Người nhập kho *</div>'+peopleCtl+'</div></div><div class="pv31-complete-hint">Danh sách bên dưới lấy từ phiếu xuất vật tư đã nhập trước đó. Các dòng gốc bị khóa tên vật tư, loại vật tư và SL xuất kho; chỉ nhập SL sử dụng, SL nhập kho, tình trạng nhập và ghi chú. Vật tư phát sinh thêm mới vẫn được chọn/sửa.</div><div class="pv18-scroll" style="margin-top:12px"><table id="pv18_complete_table"><thead><tr><th style="width:44px">STT</th><th style="width:360px">Hạng mục vật tư / loại</th><th style="width:90px">SL xuất kho</th><th style="width:90px">SL sử dụng</th><th style="width:90px">SL nhập kho</th><th style="width:130px">Tình trạng nhập</th><th style="width:170px">Ghi chú</th><th style="width:105px">Loại dòng</th></tr></thead><tbody>'+((items||[]).map(function(x,i){return completeRowHTML(x,i);}).join(''))+'</tbody></table></div><div class="pv18-form-actions"><button class="btn bg-a sm" onclick="pv17AddCompleteRow()">➕ Thêm vật tư phát sinh</button><button class="btn bg-g" onclick="pv17SubmitComplete(\''+js(phieu&&phieu.maPhieu)+'\')">✅ Lưu hoàn thiện</button></div><div class="ih" style="margin-top:8px">Khi lưu hoàn thiện, hệ thống xóa link/file PDF - Word xuất kho cũ. Lần bấm PDF/Word sau sẽ tạo bản hoàn thành mới.</div></div>';
+    root.innerHTML='<div class="card"><div class="cb pv18-form-head" style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><div><b>Cập nhật hoàn thành phiếu: '+esc(phieu&&phieu.maPhieu)+'</b><div class="pv17-small">'+esc((phieu&&(phieu.danhSachMaMay||phieu.maMay))||'')+' · '+esc((phieu&&(phieu.danhSachTenTrai||phieu.tenTrai))||'')+'</div></div><button class="btn sm" onclick="pv17RenderCompletePage()">← Quay lại</button></div><div class="pv18-form-grid"><div class="iw"><div class="il">Ngày giờ nhập kho *</div><input class="inp" type="datetime-local" id="pv17_ngayNhap" value="'+dt.toISOString().slice(0,16)+'"></div><div class="iw"><div class="il">Người nhập kho *</div>'+peopleCtl+'</div></div><div class="pv31-complete-hint">Danh sách bên dưới lấy từ phiếu xuất vật tư đã nhập trước đó. Các dòng gốc bị khóa tên vật tư, loại vật tư và SL xuất kho; chỉ nhập SL sử dụng, SL nhập kho, tình trạng nhập và ghi chú. Vật tư phát sinh thêm mới vẫn được chọn/sửa.</div><div class="pv18-scroll" style="margin-top:12px"><table id="pv18_complete_table"><thead><tr><th style="width:44px">STT</th><th style="width:360px">Hạng mục vật tư / loại</th><th style="width:90px">SL xuất kho</th><th style="width:90px">SL sử dụng</th><th style="width:90px">SL nhập kho</th><th style="width:130px">Tình trạng nhập</th><th style="width:170px">Ghi chú</th><th style="width:105px">Loại dòng</th><th style="width:55px">Bỏ</th></tr></thead><tbody>'+((items||[]).map(function(x,i){return completeRowHTML(x,i);}).join(''))+'</tbody></table></div><div class="pv18-form-actions"><button class="btn bg-a sm" onclick="pv17AddCompleteRow()">➕ Thêm vật tư phát sinh</button><button class="btn bg-g" onclick="pv17SubmitComplete(\''+js(phieu&&phieu.maPhieu)+'\')">✅ Lưu hoàn thiện</button></div><div class="ih" style="margin-top:8px">Khi lưu hoàn thiện, hệ thống xóa link/file PDF - Word xuất kho cũ. Lần bấm PDF/Word sau sẽ tạo bản hoàn thành mới.</div></div>';
   };
   window.pv16RenderCompleteForm=window.pv17RenderCompleteForm;
 })();
