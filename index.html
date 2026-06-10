@@ -143,7 +143,9 @@
   window.pvBDSCRefreshFastData_ = function(rerender = true){
     if (!window.CU || !window.PV) return;
     const selected = (PV.data && PV.data.selected) ? PV.data.selected : [];
-    const fixed = (PV.data && PV.data.vatTuCoDinh) ? PV.data.vatTuCoDinh : [];
+    // Giữ lại vatTuCoDinh từ API nếu đã có
+    const fixed = (PV.data && PV.data.vatTuCoDinh && PV.data.vatTuCoDinh.length > 0)
+      ? PV.data.vatTuCoDinh : [];
     PV.data = Object.assign({}, PV.data || {}, v15BuildFastData(), { selected, vatTuCoDinh: fixed });
     PV.user = PV.data.currentUser || PV.user;
     v15WriteJson(V15_PV_APP_CACHE_KEY, PV.data);
@@ -7407,7 +7409,6 @@ function pvBDSCBuildFastData_() {
 }
 
 function pvBDSCSyncInBackground_() {
-  // Chỉ chạy một lần, không chặn giao diện. Lấy thêm vật tư cố định từ server nếu phản hồi nhanh.
   if (_pvBDSCBackgroundSyncStarted) return;
   _pvBDSCBackgroundSyncStarted = true;
   setTimeout(async () => {
@@ -7415,11 +7416,11 @@ function pvBDSCSyncInBackground_() {
       const d = await pvApi('getAppData', {});
       if (!d) return;
       const selected = PV.data?.selected || [];
+      // Gán data từ API — vatTuCoDinh sẽ được lấy từ d, không bị ghi đè
       PV.data = Object.assign({}, PV.data || {}, d, { selected });
       PV.user = d.currentUser || PV.user;
-      pvBDSCRefreshFastData_(false);
+      // KHÔNG gọi pvBDSCRefreshFastData_ ở đây vì nó sẽ ghi đè vatTuCoDinh bằng []
       if (document.getElementById('pvb_formWrap')) {
-        // Luôn add fixed sau sync kể cả khi selected có rồi (để không bỏ sót cố định mới load về)
         pvBDSCAddFixed();
         pvBDSCRenderVatTuSearch();
         pvBDSCRenderSelected();
@@ -7433,7 +7434,10 @@ function pvBDSCSyncInBackground_() {
 function pvBDSCRefreshFastData_(rerender=true) {
   if (!CU) return;
   const selected = PV.data?.selected || [];
-  const fixed = PV.data?.vatTuCoDinh || [];
+  // Giữ lại vatTuCoDinh từ API nếu đã có, không để bị ghi đè bởi dữ liệu tĩnh rỗng
+  const fixed = (PV.data?.vatTuCoDinh && PV.data.vatTuCoDinh.length > 0)
+    ? PV.data.vatTuCoDinh
+    : [];
   PV.data = Object.assign({}, PV.data || {}, pvBDSCBuildFastData_(), { selected, vatTuCoDinh: fixed });
   PV.user = PV.data.currentUser || PV.user;
   if (!rerender) return;
