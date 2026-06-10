@@ -7479,9 +7479,17 @@ async function pvBDSCInit(view) {
   const rootId = view === 'form' ? 'pvFormRoot' : 'pvHistoryRoot';
   const root = document.getElementById(rootId);
 
-  // Nếu CU chưa có, thử restore từ localStorage trước khi báo lỗi
-  if (!CU && typeof restoreBDSCSession === 'function') {
-    restoreBDSCSession();
+  // Nếu CU chưa có, thử đọc thẳng từ localStorage để phục hồi session
+  if (!CU) {
+    try {
+      const raw = localStorage.getItem('EGREEN_BDSC_SESSION_V1') || sessionStorage.getItem('EGREEN_BDSC_SESSION_V1');
+      if (raw) {
+        const obj = JSON.parse(raw);
+        if (obj && obj.user && obj.version === 'UNIFIED_NO_PV_TOKEN_V14') {
+          CU = Object.assign({}, obj.user, { active: true });
+        }
+      }
+    } catch(e) {}
   }
 
   if (!CU) {
@@ -10851,8 +10859,19 @@ nav=function(p){
   }
 
   function bootAuthGuard(){
-    setTimeout(function(){ syncAuthUI(!!window.CU); }, 0);
-    setTimeout(function(){ syncAuthUI(!!window.CU); }, 250);
+    // Phải restore session TRƯỚC rồi mới sync UI
+    // Nếu chạy syncAuthUI trước khi restoreBDSCSession thì CU vẫn null → bị logout
+    function restoreAndSync(){
+      if(!window.CU && typeof window.restoreBDSCSession === 'function'){
+        window.restoreBDSCSession();
+      }
+      syncAuthUI(!!window.CU);
+    }
+    // Gọi ngay (sync) để tránh nháy màn hình
+    restoreAndSync();
+    // Gọi lại sau một chút phòng trường hợp DOM chưa sẵn sàng
+    setTimeout(restoreAndSync, 100);
+    setTimeout(restoreAndSync, 400);
   }
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bootAuthGuard);
   else bootAuthGuard();
