@@ -11469,7 +11469,7 @@ nav=function(p){
       return {
         'Cụm Linh Kiện': x.cum,
         'Tên Chi Tiết / Linh Kiện Thay Thế': x.ten,
-        'Các loại': x.loai.join(' '),
+        'Các loại': x.loai.join('\n'),
         _loaiArr: x.loai
       };
     });
@@ -11504,5 +11504,165 @@ nav=function(p){
   }, 300);
   setTimeout(function() { clearInterval(t); }, 30000);
 
+})();
+</script>
+
+<!-- EGREEN PATCH: An danh sach vat tu da chon va vat tu co dinh khoi khung chon them -->
+<script>
+(function(){
+  'use strict';
+  if (window.__EGREEN_VATTU_FILTER_FIX_20260610__) return;
+  window.__EGREEN_VATTU_FILTER_FIX_20260610__ = true;
+
+  function n(s){
+    try { if (typeof window.pvNorm === 'function') return window.pvNorm(s); } catch(e) {}
+    return String(s || '')
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/đ/g, 'd').replace(/Đ/g, 'D')
+      .toLowerCase().replace(/\s+/g, ' ').trim();
+  }
+  function get(o, keys){
+    o = o || {};
+    for (var i = 0; i < keys.length; i++) {
+      if (o[keys[i]] !== undefined && o[keys[i]] !== null && String(o[keys[i]]).trim() !== '') return o[keys[i]];
+    }
+    return '';
+  }
+  function ten(o){
+    try { if (typeof window.pvTenVatTu === 'function') return String(window.pvTenVatTu(o) || '').trim(); } catch(e) {}
+    return String(get(o, ['Tên Chi Tiết / Linh Kiện Thay Thế','Tên chi tiết / linh kiện thay thế','Tên vật tư','Hạng mục vật tư','tenVatTu','lk']) || '').trim();
+  }
+  function cum(o){
+    try { if (typeof window.pvCum === 'function') return String(window.pvCum(o) || '').trim(); } catch(e) {}
+    return String(get(o, ['Cụm Linh Kiện','Cụm linh kiện','cumLinhKien','cum']) || '').trim();
+  }
+  function ma(o){
+    return String(get(o, ['Mã vật tư','Ma vat tu','maVatTu']) || '').trim();
+  }
+  function idOf(o){
+    try { if (typeof window.pvMatId === 'function') return String(window.pvMatId(o) || '').trim(); } catch(e) {}
+    return n(cum(o) + '|' + ten(o) + '|' + ma(o));
+  }
+  function nameKey(o){
+    return n(cum(o) + '|' + ten(o));
+  }
+  function isFixedRow(o){
+    o = o || {};
+    return o.fixed === true || n(o.nguonVatTu || o['Nguồn vật tư'] || '').indexOf('co dinh') >= 0;
+  }
+  function ensureSelectedArray(){
+    if (!window.PV) window.PV = {data:{}};
+    if (!PV.data) PV.data = {};
+    if (!Array.isArray(PV.data.selected)) PV.data.selected = [];
+  }
+  function tryAddFixed(){
+    ensureSelectedArray();
+    try {
+      if (typeof window.pvBDSCAddFixed === 'function') window.pvBDSCAddFixed();
+    } catch(e) {
+      console.warn('[EGREEN VAT TU FILTER] Khong the add vat tu co dinh truoc khi render', e);
+    }
+  }
+  function buildHiddenIndex(){
+    ensureSelectedArray();
+    var out = { ids:{}, names:{}, fixedIds:{}, fixedNames:{} };
+    (PV.data.selected || []).forEach(function(x){
+      var id = idOf(x), nk = nameKey(x);
+      if (id) out.ids[id] = true;
+      if (nk) out.names[nk] = true;
+      if (isFixedRow(x)) {
+        if (id) out.fixedIds[id] = true;
+        if (nk) out.fixedNames[nk] = true;
+      }
+    });
+    (PV.data.vatTuCoDinh || []).forEach(function(x){
+      var id = idOf(x), nk = nameKey(x);
+      if (id) out.fixedIds[id] = true;
+      if (nk) out.fixedNames[nk] = true;
+    });
+    return out;
+  }
+  function shouldHideMaterial(x){
+    var idx = buildHiddenIndex();
+    var id = idOf(x), nk = nameKey(x);
+    return !!(idx.ids[id] || idx.names[nk] || idx.fixedIds[id] || idx.fixedNames[nk]);
+  }
+  function filterSelectableList(list){
+    var seen = {};
+    return (list || []).filter(function(x){
+      if (!ten(x)) return false;
+      if (shouldHideMaterial(x)) return false;
+      var k = idOf(x) || nameKey(x);
+      if (seen[k]) return false;
+      seen[k] = true;
+      return true;
+    });
+  }
+
+  var oldBDSCSelectable = typeof window.pvBDSCSelectable === 'function' ? window.pvBDSCSelectable : null;
+  window.pvBDSCSelectable = function(){
+    var base = [];
+    try {
+      base = oldBDSCSelectable ? oldBDSCSelectable.apply(this, arguments) : ((window.PV && PV.data && PV.data.vatTu) || []);
+    } catch(e) {
+      base = (window.PV && PV.data && PV.data.vatTu) || [];
+    }
+    return filterSelectableList(base);
+  };
+
+  var oldBDSCRenderSearch = typeof window.pvBDSCRenderVatTuSearch === 'function' ? window.pvBDSCRenderVatTuSearch : null;
+  if (oldBDSCRenderSearch) {
+    window.pvBDSCRenderVatTuSearch = function(){
+      tryAddFixed();
+      return oldBDSCRenderSearch.apply(this, arguments);
+    };
+  }
+
+  var oldBDSCSelectMaterial = typeof window.pvBDSCSelectMaterial === 'function' ? window.pvBDSCSelectMaterial : null;
+  if (oldBDSCSelectMaterial) {
+    window.pvBDSCSelectMaterial = function(id, checked){
+      if (!checked) return oldBDSCSelectMaterial.apply(this, arguments);
+      var x = ((window.PV && PV.data && PV.data.vatTu) || []).find(function(v){ return idOf(v) === id; });
+      if (x && shouldHideMaterial(x)) {
+        try { if (typeof window.toast === 'function') window.toast('Vật tư này đã có trong danh sách đã chọn hoặc là vật tư cố định.', 'warn'); } catch(e) {}
+        try { if (typeof window.pvBDSCRenderVatTuSearch === 'function') window.pvBDSCRenderVatTuSearch(); } catch(e) {}
+        try { if (typeof window.pvBDSCRenderSelected === 'function') window.pvBDSCRenderSelected(); } catch(e) {}
+        return;
+      }
+      return oldBDSCSelectMaterial.apply(this, arguments);
+    };
+  }
+
+  /* Dong bo cho module phieu vat tu cu neu trang dang dung cac ham pv* */
+  var oldPVSelectable = typeof window.pvSelectable === 'function' ? window.pvSelectable : null;
+  if (oldPVSelectable) {
+    window.pvSelectable = function(){
+      var base = [];
+      try { base = oldPVSelectable.apply(this, arguments); } catch(e) { base = ((window.PV && PV.data && PV.data.vatTu) || []); }
+      return filterSelectableList(base);
+    };
+  }
+  var oldPVRenderSearch = typeof window.pvRenderVatTuSearch === 'function' ? window.pvRenderVatTuSearch : null;
+  if (oldPVRenderSearch) {
+    window.pvRenderVatTuSearch = function(){
+      tryAddFixed();
+      return oldPVRenderSearch.apply(this, arguments);
+    };
+  }
+  var oldPVSelectMaterial = typeof window.pvSelectMaterial === 'function' ? window.pvSelectMaterial : null;
+  if (oldPVSelectMaterial) {
+    window.pvSelectMaterial = function(id, checked){
+      if (!checked) return oldPVSelectMaterial.apply(this, arguments);
+      var x = ((window.PV && PV.data && PV.data.vatTu) || []).find(function(v){ return idOf(v) === id; });
+      if (x && shouldHideMaterial(x)) return;
+      return oldPVSelectMaterial.apply(this, arguments);
+    };
+  }
+
+  /* Render lai neu form da mo truoc khi patch duoc cai */
+  setTimeout(function(){
+    try { if (typeof window.pvBDSCRenderVatTuSearch === 'function') window.pvBDSCRenderVatTuSearch(); } catch(e) {}
+    try { if (typeof window.pvBDSCRenderSelected === 'function') window.pvBDSCRenderSelected(); } catch(e) {}
+  }, 300);
 })();
 </script>
