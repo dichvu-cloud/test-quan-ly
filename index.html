@@ -12218,3 +12218,696 @@ nav=function(p){
   }
 })();
 </script>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     PATCH v42 - 3 FIXES:
+     1. Vật tư cố định dùng dữ liệu tĩnh + dropdown loại (Bugi, Dây curoa, Lọc nhớt, Lọc gió)
+     2. Linh kiện đã chọn được khôi phục đúng khi mở lại picker
+     3. Vật tư phát sinh trong hoàn thành phiếu có nút X để xóa
+════════════════════════════════════════════════════════════════════ -->
+
+<style id="pv42-style">
+/* Nút xóa dòng phát sinh */
+.pv42-del-row-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px; height: 24px;
+  border: none;
+  background: #fee2e2;
+  color: #dc2626;
+  border-radius: 50%;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  flex-shrink: 0;
+  line-height: 1;
+  transition: background .15s;
+  padding: 0;
+  vertical-align: middle;
+}
+.pv42-del-row-btn:hover { background: #fca5a5; }
+
+/* Dropdown loại trong selected items - full behavior */
+.pv42-loai-cell {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+  width: 100%;
+  margin-top: 3px;
+}
+.pv42-loai-cell label {
+  font-size: 10px !important;
+  color: #64748b;
+  white-space: nowrap;
+  margin: 0 !important;
+  font-weight: 400 !important;
+}
+.pv42-loai-sel {
+  border: 1.5px solid var(--bd, #d1d5db);
+  border-radius: 7px;
+  padding: 3px 7px;
+  font-size: 11px;
+  background: #fff;
+  color: var(--s, #1e293b);
+  cursor: pointer;
+  flex: 1;
+  min-width: 140px;
+  max-width: 260px;
+  outline: none;
+}
+.pv42-loai-sel:focus { border-color: var(--g, #0d6e3f); box-shadow: 0 0 0 2px rgba(13,110,63,.1); }
+
+/* Dropdown loại trong search list */
+.pv42-search-loai {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 3px;
+  width: 100%;
+}
+</style>
+
+<script id="pv42-main-patch">
+(function(){
+  if(window.__pv42Done) return;
+  window.__pv42Done = true;
+
+  /* ═══════════════════════════════════════════════════
+     DỮLIỆU TĨNH: Loại vật tư từ sheet 4 & 9
+  ═══════════════════════════════════════════════════ */
+  var LOAI_MAP = {
+    'bugi': ['BKR6E','DCPR8E','Mar10A-J 4706','BP6ES'],
+    'day curoa': ['RECMF - 8560','A-7473','A-5639','12PK1625','A64','8610','C60 - RECMF 9600','A54','5PK1110','5PK1050'],
+    'bau loc gio / cum loc gio': ['LỌC GIÓ 6D105(AS1024)','A-6465A (Nitco)/ A-6117-S','Lọc gió A6117S','Lọc gió Donaldson P532473','P831197'],
+    'bau loc gio': ['LỌC GIÓ 6D105(AS1024)','A-6465A (Nitco)/ A-6117-S','Lọc gió A6117S','Lọc gió Donaldson P532473','P831197'],
+    'loc gio': ['LỌC GIÓ 6D105(AS1024)','A-6465A (Nitco)/ A-6117-S','Lọc gió A6117S','Lọc gió Donaldson P532473','P831197'],
+    'loc nhot 1': ['C-5602','T-5121','LF9009','Lọc nhớt Sakura O-18051','WF2072','Lọc nhớt Sakura O-1808','Lọc nhớt Sakura O-1809','Lọc nhớt Sakura O-1804','Lọc nhớt Sakura O-1806'],
+    'loc nhot 2': ['C-5602','T-5121','LF9009','Lọc nhớt Sakura O-18051','WF2072','Lọc nhớt Sakura O-1808','Lọc nhớt Sakura O-1809','Lọc nhớt Sakura O-1804','Lọc nhớt Sakura O-1806'],
+    'o bi truc danh lua': ['Vòng bi SKF 6007 - 2Z'],
+    'o bi cu phat': ['Vòng bi E 30206J','Vòng bi 6312C3','Vòng bi 6317','Vòng bi 6215ZZCM','Vòng bi 6310-2Z']
+  };
+  window.PV42_LOAI_MAP = LOAI_MAP;
+
+  function normKey(s){
+    return String(s||'').toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+      .replace(/\u0111/g,'d').replace(/\s+/g,' ').trim();
+  }
+  function esc(s){
+    return String(s==null?'':s).replace(/[&<>"']/g,function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+
+  // Lấy danh sách loại cho tên vật tư
+  function getLoai(ten){
+    if(!ten) return [];
+    var nk = normKey(ten);
+    // Exact match first
+    if(LOAI_MAP[nk]) return LOAI_MAP[nk];
+    // Partial match
+    var result = [];
+    Object.keys(LOAI_MAP).forEach(function(k){
+      if(nk === k || nk.indexOf(k) >= 0 || k.indexOf(nk) >= 0){
+        result = result.concat(LOAI_MAP[k]);
+      }
+    });
+    // Also check from vatTuCoDinh / vatTu data
+    try {
+      var p = window.PV;
+      if(p && p.data){
+        ['vatTu','vatTuCoDinh'].forEach(function(src){
+          (p.data[src]||[]).forEach(function(row){
+            var rn = normKey(row['Tên Chi Tiết / Linh Kiện Thay Thế']||row.tenVatTu||'');
+            if(rn === nk){
+              var raw = row['Các loại']||row.loaiVatTu||'';
+              if(raw){
+                String(raw).replace(/\r/g,'\n').split(/\n|;|\|/g).forEach(function(l){
+                  l = l.trim();
+                  if(l && result.indexOf(l)<0) result.push(l);
+                });
+              }
+            }
+          });
+        });
+      }
+    } catch(e){}
+    // Deduplicate
+    var out=[],seen={};
+    result.forEach(function(v){ v=String(v||'').trim(); if(!v)return; var k=normKey(v); if(!seen[k]){seen[k]=1;out.push(v);} });
+    return out;
+  }
+  window.pv42GetLoai = getLoai;
+
+  // Build dropdown HTML
+  function buildDropdown(ten, sel, extraAttr){
+    var loais = getLoai(ten);
+    if(!loais.length) return '';
+    sel = String(sel||'');
+    extraAttr = extraAttr||'';
+    var opts = '<option value="">\u2014 Ch\u1ecdn lo\u1ea1i \u2014</option>';
+    loais.forEach(function(l){
+      opts += '<option value="'+esc(l)+'" '+(normKey(l)===normKey(sel)?'selected':'')+'>'+esc(l)+'</option>';
+    });
+    return '<select class="pv42-loai-sel" '+extraAttr+' title="Ch\u1ecdn lo\u1ea1i v\u1eadt t\u01b0">'+opts+'</select>';
+  }
+  window.pv42BuildDropdown = buildDropdown;
+
+  /* ═══════════════════════════════════════════════════
+     FIX 1: pvBDSCAddFixed dùng dữ liệu tĩnh VAT_TU_CO_DINH
+     (không cần API, hiển thị ngay sau login)
+  ═══════════════════════════════════════════════════ */
+
+  // Danh sách vật tư cố định tĩnh (từ sheet 9)
+  var STATIC_CODINH = [
+    {cum:'Công cụ, thiết bị', ten:'Bộ khẩu (8-32 - có khẩu tuýp 16)'},
+    {cum:'Công cụ, thiết bị', ten:'Bộ cờ lê (8-32)'},
+    {cum:'Công cụ, thiết bị', ten:'Tua vít 2 cạnh, 4 cạnh (to, nhỏ)'},
+    {cum:'Công cụ, thiết bị', ten:'Bộ lục lăng'},
+    {cum:'Công cụ, thiết bị', ten:'Đồng hồ đo điện'},
+    {cum:'Công cụ, thiết bị', ten:'Đồng hồ đo xung Hantek'},
+    {cum:'Công cụ, thiết bị', ten:'Máy nội soi'},
+    {cum:'Công cụ, thiết bị', ten:'Máy cắt cầm tay'},
+    {cum:'Công cụ, thiết bị', ten:'Bộ súng pin'},
+    {cum:'Công cụ, thiết bị', ten:'Đồng hồ đo áp suất buồng đốt'},
+    {cum:'Công cụ, thiết bị', ten:'Đồng hồ đo áp suất nhớt cơ'},
+    {cum:'Công cụ, thiết bị', ten:'Bộ đột gioăng'},
+    {cum:'Công cụ, thiết bị', ten:'Kìm tuốt, bóp cos dây điện'},
+    {cum:'Công cụ, thiết bị', ten:'Bộ cos các loại'},
+    {cum:'Điều khiển động lực', ten:'Relay trung gian 24VDC 10A 8 chân'},
+    {cum:'Điều khiển động lực', ten:'Đế Relay trung gian 24VDC 10A 8 chân'},
+    {cum:'Nguồn DC', ten:'Công tắc xoay'},
+    {cum:'Hệ thống đánh lửa', ten:'Bugi'},
+    {cum:'Hệ thống đánh lửa', ten:'Bobin'},
+    {cum:'Hệ thống đánh lửa', ten:'Giắc bobin'},
+    {cum:'Hệ thống đánh lửa', ten:'Núm cao su'},
+    {cum:'Hệ thống đánh lửa', ten:'Long đen nhôm'},
+    {cum:'Hệ thống đánh lửa', ten:'Mạch đánh lửa'},
+    {cum:'Hệ thống đánh lửa', ten:'Cảm biến đánh lửa (tiệm cận Pr08-2dp)'},
+    {cum:'Hệ thống đánh lửa', ten:'Mạch hạ áp 24VDC-12VDC 30A'},
+    {cum:'Cảm biến / tín hiệu', ten:'Cảm biến nước'},
+    {cum:'Cảm biến / tín hiệu', ten:'Cảm biến nhớt'},
+    {cum:'Điều tốc / điều khiển tải', ten:'Pickup'},
+    {cum:'Điều tốc / điều khiển tải', ten:'Rotuyn'},
+    {cum:'Nguồn điện 3 pha', ten:'AVR SX440'},
+    {cum:'Ht khởi động', ten:'Relay đề'},
+    {cum:'Ht khởi động', ten:'Relay thời gian 24VDC 10A 8 chân'},
+    {cum:'Ht khởi động', ten:'Đế relay thời gian 24VDC 10A 8 chân'},
+    {cum:'Ht nạp, xả, tăng áp', ten:'Bầu lọc gió / Cụm lọc gió'},
+    {cum:'Ht nạp, xả, tăng áp', ten:'Đế relay trung gian 8 chân'},
+    {cum:'Ht bôi trơn', ten:'Lưới lọc thô các-te (Phao lọc nhớt)'},
+    {cum:'Ht bôi trơn', ten:'Lọc nhớt 1'},
+    {cum:'Ht bôi trơn', ten:'Lọc nhớt 2'},
+    {cum:'Vật tư, chi tiết máy', ten:'Dây đồng 1x1.0'},
+    {cum:'Vật tư, chi tiết máy', ten:'Dây đồng 1x2.5'},
+    {cum:'Vật tư, chi tiết máy', ten:'Băng dính điện'},
+    {cum:'Vật tư, chi tiết máy', ten:'Bìa amiang'}
+  ];
+  window.PV42_STATIC_CODINH = STATIC_CODINH;
+
+  function applyStaticCoDinhToData(){
+    try {
+      var p = window.PV;
+      if(!p || !p.data) return;
+      if(!Array.isArray(p.data.vatTuCoDinh) || !p.data.vatTuCoDinh.length){
+        // Inject static data into vatTuCoDinh
+        p.data.vatTuCoDinh = STATIC_CODINH.map(function(item){
+          return {
+            'Cụm Linh Kiện': item.cum,
+            'Tên Chi Tiết / Linh Kiện Thay Thế': item.ten,
+            tenVatTu: item.ten,
+            cumLinhKien: item.cum,
+            'Các loại': (getLoai(item.ten)||[]).join('\n')
+          };
+        });
+      } else {
+        // Already have data from API - ensure Các loại is populated from local fallback
+        p.data.vatTuCoDinh.forEach(function(row){
+          var ten = row['Tên Chi Tiết / Linh Kiện Thay Thế'] || row.tenVatTu || '';
+          if(!row['Các loại'] && ten){
+            var loais = getLoai(ten);
+            if(loais.length) row['Các loại'] = loais.join('\n');
+          }
+        });
+      }
+      // Also inject into vatTu for type lookups
+      if(!Array.isArray(p.data.vatTu)) p.data.vatTu = [];
+      STATIC_CODINH.forEach(function(item){
+        var exists = p.data.vatTu.some(function(r){
+          return normKey(r['Tên Chi Tiết / Linh Kiện Thay Thế']||r.tenVatTu||'') === normKey(item.ten);
+        });
+        if(!exists){
+          p.data.vatTu.push({
+            'Cụm Linh Kiện': item.cum,
+            'Tên Chi Tiết / Linh Kiện Thay Thế': item.ten,
+            tenVatTu: item.ten,
+            cumLinhKien: item.cum,
+            'Các loại': (getLoai(item.ten)||[]).join('\n')
+          });
+        }
+      });
+    } catch(e){ console.warn('[pv42] applyStaticCoDinhToData:', e); }
+  }
+  window.pv42ApplyStaticCoDinh = applyStaticCoDinhToData;
+
+  /* ═══════════════════════════════════════════════════
+     FIX 2: Khôi phục checkbox trong part picker đúng
+     Vấn đề: existing keys = "cum__part" nhưng autoSave lưu theo lkName
+     Giải pháp: thống nhất cả 2 phía dùng key "cum__part"
+  ═══════════════════════════════════════════════════ */
+
+  // Override autoSaveParts để lưu đúng key "cum__part"
+  window.pv42SavePartsFromModal = function(){
+    var body = document.getElementById('partPickerBody');
+    if(!body) return;
+    var idx = (typeof curPartTarget !== 'undefined') ? curPartTarget : null;
+    if(idx === null) return;
+    var disp = document.getElementById('ph-parts-' + idx);
+    if(!disp) return;
+
+    var sel = {};
+    // Đọc từ cấu trúc: mỗi .pi-row có .pi-name và cumId ẩn trong DOM
+    body.querySelectorAll('.pi-row').forEach(function(row){
+      var cb = row.querySelector('input[type=checkbox]');
+      if(!cb || !cb.checked) return;
+      var lbl = row.querySelector('.pi-name');
+      if(!lbl) return;
+      var lkName = lbl.textContent.trim();
+
+      // Tìm cum từ parent heading
+      var cumDiv = null;
+      var parent = row.parentElement;
+      while(parent && parent !== body){
+        var heading = parent.previousElementSibling;
+        if(heading && heading.style && heading.style.textTransform === 'uppercase'){
+          cumDiv = heading;
+          break;
+        }
+        // Try to find the cum label above this row's container
+        var prev = parent.parentElement;
+        if(prev){
+          var cumEl = prev.querySelector('[style*="text-transform:uppercase"]');
+          if(cumEl){ cumDiv = cumEl; break; }
+        }
+        parent = parent.parentElement;
+      }
+      // Fallback: walk up and find the cum div
+      var rowParent = row.parentElement; // flex column
+      var sectionDiv = rowParent ? rowParent.parentElement : null; // margin-bottom:14px div
+      var cumLabel = sectionDiv ? sectionDiv.querySelector('[style*="text-transform:uppercase"]') : null;
+      var cumName = cumLabel ? cumLabel.textContent.trim() : '';
+
+      var k = cumName ? (cumName + '__' + lkName) : lkName;
+
+      var act = row.querySelector('.pa.rep') || row.querySelector('.pa.fix') || row.querySelector('.pa.cln');
+      var loai = 'Thay thế';
+      if(act){
+        if(act.classList.contains('fix')) loai = 'Sửa chữa';
+        else if(act.classList.contains('cln')) loai = 'Bảo dưỡng';
+      }
+      var qtyInp = row.querySelector('input[type=number]');
+      var sl = qtyInp ? Math.max(1, parseInt(qtyInp.value)||1) : 1;
+      var gcInp = row.querySelector('.pi-gc');
+      var gc = gcInp ? gcInp.value.trim() : '';
+      sel[k] = {loai: loai, sl: sl, gc: gc};
+    });
+
+    var items = Object.entries ? Object.entries(sel) : Object.keys(sel).map(function(k){return [k,sel[k]];});
+    if(!items.length){
+      // Don't clear if nothing was checked - user might have just opened picker without changes
+      return;
+    }
+
+    disp.dataset.parts = JSON.stringify(sel);
+    disp.innerHTML = items.map(function(entry){
+      var rawKey = entry[0], obj = entry[1];
+      // Display name: strip "cum__" prefix
+      var displayName = rawKey.indexOf('__') >= 0 ? rawKey.split('__').slice(1).join('__') : rawKey;
+      var badgeClass = obj.loai === 'Thay thế' ? 'br' : (obj.loai === 'Sửa chữa' ? 'ba' : 'bb');
+      return '<div style="display:flex;align-items:center;gap:5px;margin-bottom:4px;flex-wrap:wrap">' +
+        '<span style="font-size:11px;font-weight:600">' + esc(displayName) + '</span>' +
+        '<span class="b ' + badgeClass + '">' + esc(obj.loai) + '</span>' +
+        '<span style="font-size:10px;font-family:var(--mono,monospace);background:#f1f5f9;color:#475569;padding:1px 6px;border-radius:4px">x' + obj.sl + '</span>' +
+        (obj.gc ? '<span style="font-size:10px;color:var(--mu,#64748b)">' + esc(obj.gc) + '</span>' : '') +
+        '</div>';
+    }).join('');
+  };
+
+  // Patch closeOv để tự lưu khi đóng modal ov-part
+  (function(){
+    var origClose = window.closeOv;
+    window.closeOv = function(id){
+      if(id === 'ov-part'){
+        try { window.pv42SavePartsFromModal(); } catch(e){}
+      }
+      if(origClose) origClose.apply(this, arguments);
+    };
+  })();
+
+  // Ẩn nút Xác nhận, đổi Đóng thành Lưu & Đóng
+  function patchModalBtns(){
+    var mf = document.querySelector('#ov-part .mf');
+    if(!mf || mf.dataset.pv42) return;
+    mf.dataset.pv42 = '1';
+    var btns = mf.querySelectorAll('.btn');
+    btns.forEach(function(btn){
+      var t = (btn.getAttribute('onclick')||'') + btn.textContent;
+      if(t.indexOf('confirmParts') >= 0 || t.indexOf('Xác nhận') >= 0){
+        btn.style.display = 'none';
+      }
+      if(btn.textContent.trim() === 'Đóng'){
+        btn.innerHTML = '✓ Lưu &amp; Đóng';
+        btn.classList.remove('bg-gr');
+        btn.classList.add('bg-g');
+        // Override onclick để lưu trước khi đóng
+        btn.setAttribute('onclick', "window.pv42SavePartsFromModal();closeOv('ov-part')");
+      }
+    });
+  }
+  setTimeout(patchModalBtns, 400);
+  setTimeout(patchModalBtns, 1500);
+
+  // Patch openPartPicker để gọi patchModalBtns
+  (function(){
+    var origOpen = window.openPartPicker;
+    if(typeof origOpen !== 'function') return;
+    window.openPartPicker = function(){
+      origOpen.apply(this, arguments);
+      setTimeout(patchModalBtns, 80);
+    };
+  })();
+
+  /* ═══════════════════════════════════════════════════
+     FIX 3: Nút X xóa dòng phát sinh trong hoàn thành phiếu
+  ═══════════════════════════════════════════════════ */
+
+  window.pv42DeleteCompleteRow = function(btn){
+    var tr = btn ? btn.closest('tr') : null;
+    if(tr) tr.remove();
+    // Renumber STT
+    var tables = ['pv18_complete_table','pv17_complete_table','pv16_complete_table'];
+    for(var t=0;t<tables.length;t++){
+      var tb = document.getElementById(tables[t]);
+      if(tb){
+        var rows = tb.querySelectorAll('tbody tr');
+        rows.forEach(function(r,i){
+          var td = r.querySelector('td:first-child');
+          if(td) td.textContent = i+1;
+        });
+        break;
+      }
+    }
+  };
+
+  // Override completeRowHTML of pv31 to add delete button for phát sinh rows
+  function patchCompleteRowHTML(){
+    var origFn = window.pv17CompleteRowHTML;
+    if(!origFn || origFn.__pv42Patched) return;
+
+    function wrappedCompleteRowHTML(x, i){
+      var html = origFn(x, i);
+      // If it's a phát sinh row, add delete button in the last cell
+      var isPhatSinh = false;
+      try {
+        isPhatSinh = (x && (
+          String(x.loaiDong||'').toLowerCase().indexOf('ph') >= 0 && String(x.loaiDong||'').toLowerCase().indexOf('sinh') >= 0 ||
+          String(x.nguonVatTu||'').toLowerCase().indexOf('ph') >= 0 && String(x.nguonVatTu||'').toLowerCase().indexOf('sinh') >= 0 ||
+          x.__pv31New || x.__pv30Dropdown
+        ));
+      } catch(e){}
+
+      if(isPhatSinh && html){
+        // Add X button in last td (loại dòng cell)
+        // Replace </tr> with del btn + </tr>
+        var delBtn = '<button class="pv42-del-row-btn" onclick="pv42DeleteCompleteRow(this)" title="Xóa dòng phát sinh này">✕</button>';
+        // Insert before </tr>
+        html = html.replace(/<\/tr>\s*$/, function(){
+          // Add new td with just the X button, or append to last td
+          return '<td style="text-align:center;padding:3px">' + delBtn + '</td></tr>';
+        });
+        // Also add the extra header if needed (only once)
+        // We'll handle this by patching the table render
+      }
+      return html;
+    }
+    wrappedCompleteRowHTML.__pv42Patched = true;
+    window.pv17CompleteRowHTML = wrappedCompleteRowHTML;
+    window.pv16CompleteRowHTML = wrappedCompleteRowHTML;
+  }
+
+  // Also patch pv17AddCompleteRow to add delete button inline
+  function patchAddCompleteRow(){
+    var origAdd = window.pv17AddCompleteRow;
+    if(!origAdd || origAdd.__pv42Patched) return;
+
+    function wrappedAdd(){
+      var tables = ['pv18_complete_table','pv17_complete_table','pv16_complete_table'];
+      var tb = null;
+      for(var t=0;t<tables.length;t++){
+        var el = document.querySelector('#'+tables[t]+' tbody');
+        if(el){ tb = el; break; }
+      }
+      if(!tb){ origAdd(); return; }
+
+      var i = tb.children.length;
+      var delBtn = '<button class="pv42-del-row-btn" onclick="pv42DeleteCompleteRow(this)" title="Xóa dòng phát sinh này">✕</button>';
+
+      // Build a fresh phát sinh row with delete button
+      // Use the existing pv31 function to get base HTML, then inject del btn
+      var baseObj = {loaiDong:'Phát sinh', nguonVatTu:'Phát sinh', __pv31New:true};
+
+      // Try pv31's completeRowHTML
+      var html = '';
+      try {
+        // Get from pv31 directly (it's in closure, so use the window-exposed version)
+        var origOrig = origAdd.__originalFn || origAdd;
+        // Since we can't easily call the closure version, build manually
+        html = window.pv17CompleteRowHTML(baseObj, i);
+      } catch(e){
+        html = '<tr data-pv31-origin="phat-sinh"><td style="text-align:center">'+(i+1)+'</td>' +
+          '<td><input data-k="tenVatTu" value=""><input type="hidden" data-k="nguonVatTu" value="Phát sinh"><input type="hidden" data-k="cumLinhKien" value=""><input type="hidden" data-k="maVatTu" value=""><input type="hidden" data-k="donViTinh" value=""><input type="hidden" data-k="loaiVatTu" value=""><input type="hidden" data-k="loaiDong" value="Phát sinh"></td>' +
+          '<td><input type="number" min="0" value="" data-k="soLuongXuatKho"></td>' +
+          '<td><input type="number" min="0" value="" data-k="soLuongSuDung"></td>' +
+          '<td><input type="number" min="0" value="" data-k="soLuongNhapKho"></td>' +
+          '<td><select data-k="tinhTrangNhapKho"><option></option><option>Mới</option><option>Cũ</option><option>Tốt</option><option>Hỏng</option></select></td>' +
+          '<td><input value="" data-k="ghiChu"></td>' +
+          '<td><span class="pv31-lock-badge">Phát sinh</span></td>' +
+          '<td style="text-align:center;padding:3px">' + delBtn + '</td>' +
+          '</tr>';
+      }
+
+      // Ensure del button is in the row
+      if(html.indexOf('pv42-del-row-btn') < 0){
+        html = html.replace(/<\/tr>\s*$/, '<td style="text-align:center;padding:3px">' + delBtn + '</td></tr>');
+      }
+      tb.insertAdjacentHTML('beforeend', html);
+    }
+    wrappedAdd.__pv42Patched = true;
+    window.pv17AddCompleteRow = wrappedAdd;
+    window.pv16AddCompleteRow = wrappedAdd;
+  }
+
+  /* ═══════════════════════════════════════════════════
+     FIX: pvBDSCRenderSelected - thêm dropdown loại ngay trong render
+  ═══════════════════════════════════════════════════ */
+
+  function patchRenderSelected(){
+    var orig = window.pvBDSCRenderSelected;
+    if(!orig || orig.__pv42Patched) return;
+
+    function patched(){
+      // Call original first
+      if(orig) orig.apply(this, arguments);
+
+      // Now inject type dropdowns for items that have multiple types
+      setTimeout(function(){
+        var box = document.getElementById('pvb_selectedItems');
+        if(!box) return;
+        var p = window.PV;
+        if(!p || !p.data || !p.data.selected) return;
+
+        p.data.selected.forEach(function(item){
+          if(!item.id) return;
+          var loais = getLoai(item.tenVatTu);
+          if(!loais.length) return;
+
+          // Find the row div for this item by scanning all divs
+          var rows = box.querySelectorAll('div[style]');
+          var found = null;
+          rows.forEach(function(row){
+            // Already has dropdown
+            if(row.querySelector('.pv42-loai-sel')) return;
+            // Match by checkbox onchange attribute
+            var cb = row.querySelector('input[type=checkbox]');
+            if(!cb) return;
+            var oc = cb.getAttribute('onchange')||'';
+            // Check if this row belongs to our item
+            var jsId = item.id.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+            if(oc.indexOf(item.id.substring(0,15)) < 0 &&
+               oc.indexOf(jsId.substring(0,15)) < 0) return;
+            found = row;
+          });
+
+          if(!found) return;
+
+          // Build and inject dropdown
+          var wrap = document.createElement('div');
+          wrap.className = 'pv42-loai-cell';
+          var lbl = document.createElement('label');
+          lbl.textContent = 'Loại:';
+          wrap.appendChild(lbl);
+
+          var sel = document.createElement('select');
+          sel.className = 'pv42-loai-sel';
+          sel.title = 'Chọn loại vật tư';
+          sel.innerHTML = '<option value="">\u2014 Ch\u1ecdn lo\u1ea1i \u2014</option>' +
+            loais.map(function(l){
+              return '<option value="'+esc(l)+'" '+(normKey(l)===normKey(item.loaiVatTu||'')?'selected':'')+'>'+esc(l)+'</option>';
+            }).join('');
+          sel.addEventListener('change', function(){
+            // Find item and update loaiVatTu
+            var p2 = window.PV;
+            if(p2 && p2.data && p2.data.selected){
+              var it = p2.data.selected.find ? p2.data.selected.find(function(x){ return x.id===item.id; }) : null;
+              if(it){ it.loaiVatTu = sel.value; }
+            }
+          });
+          wrap.appendChild(sel);
+          found.appendChild(wrap);
+        });
+      }, 100);
+    }
+    patched.__pv42Patched = true;
+    window.pvBDSCRenderSelected = patched;
+  }
+
+  /* ═══════════════════════════════════════════════════
+     FIX: pvBDSCRenderVatTuSearch - thêm dropdown loại trong search list
+  ═══════════════════════════════════════════════════ */
+
+  function patchRenderSearch(){
+    var orig = window.pvBDSCRenderVatTuSearch;
+    if(!orig || orig.__pv42Patched) return;
+
+    function patched(){
+      if(orig) orig.apply(this, arguments);
+      // Inject type dropdowns
+      setTimeout(function(){
+        var box = document.getElementById('pvb_vatTuSearchList');
+        if(!box) return;
+        var rows = box.querySelectorAll('.pi-row,[style*="display:flex"]');
+        rows.forEach(function(row){
+          if(row.querySelector('.pv42-loai-sel')) return;
+          var bEl = row.querySelector('b');
+          if(!bEl) return;
+          var ten = bEl.textContent.trim();
+          var loais = getLoai(ten);
+          if(!loais.length) return;
+
+          var cb = row.querySelector('input[type=checkbox]');
+          var wrap = document.createElement('div');
+          wrap.className = 'pv42-search-loai';
+          var lbl = document.createElement('label');
+          lbl.textContent = 'Loại: ';
+          lbl.style.cssText = 'font-size:10px;color:#64748b;white-space:nowrap';
+          wrap.appendChild(lbl);
+          var sel = document.createElement('select');
+          sel.className = 'pv42-loai-sel';
+          sel.style.maxWidth = '220px';
+          sel.title = 'Chọn loại';
+          sel.innerHTML = '<option value="">\u2014 Ch\u1ecdn \u2014</option>' +
+            loais.map(function(l){ return '<option value="'+esc(l)+'">'+esc(l)+'</option>'; }).join('');
+          sel.addEventListener('change', function(){
+            // When type is selected, also trigger checkbox selection
+            if(cb && !cb.checked){
+              cb.checked = true;
+              var evt = new Event('change', {bubbles:true});
+              cb.dispatchEvent(evt);
+            }
+            // Update loaiVatTu in selected item
+            var p2 = window.PV;
+            if(!p2 || !p2.data || !p2.data.selected) return;
+            if(!cb) return;
+            var oc = cb.getAttribute('onchange')||'';
+            // Extract id from onchange="pvBDSCSelectMaterial('...', ..."
+            var m = oc.match(/pvBDSCSelectMaterial\s*\(\s*['"]([^'"]+)['"]/);
+            if(!m) return;
+            var iid = m[1];
+            var found = null;
+            p2.data.selected.forEach(function(x){ if(x.id===iid) found=x; });
+            if(found) found.loaiVatTu = sel.value;
+          });
+          wrap.appendChild(sel);
+          row.appendChild(wrap);
+        });
+      }, 80);
+    }
+    patched.__pv42Patched = true;
+    window.pvBDSCRenderVatTuSearch = patched;
+  }
+
+  /* ═══════════════════════════════════════════════════
+     FIX: pvBDSCAddFixed - dùng static data trước, API sau
+  ═══════════════════════════════════════════════════ */
+
+  function patchAddFixed(){
+    var orig = window.pvBDSCAddFixed;
+    if(orig && orig.__pv42Patched) return;
+
+    function patched(){
+      // Inject static data if API hasn't returned yet
+      applyStaticCoDinhToData();
+      // Then call original (which reads vatTuCoDinh)
+      if(orig) orig.apply(this, arguments);
+    }
+    patched.__pv42Patched = true;
+    window.pvBDSCAddFixed = patched;
+  }
+
+  /* ═══════════════════════════════════════════════════
+     INIT: Apply all patches
+  ═══════════════════════════════════════════════════ */
+
+  function applyAll(){
+    applyStaticCoDinhToData();
+    patchAddFixed();
+    patchRenderSelected();
+    patchRenderSearch();
+    patchCompleteRowHTML();
+    patchAddCompleteRow();
+  }
+
+  // Apply immediately and on delays
+  applyAll();
+  setTimeout(applyAll, 300);
+  setTimeout(applyAll, 1000);
+  setTimeout(applyAll, 3000);
+
+  // Also apply when nav changes
+  (function(){
+    var origNav = window.nav;
+    if(typeof origNav !== 'function') return;
+    window.nav = function(p){
+      var r = origNav.apply(this, arguments);
+      if(p === 'taoPhieu' || p === 'hoanThanhPhieu'){
+        setTimeout(applyAll, 200);
+        if(p === 'taoPhieu') applyStaticCoDinhToData();
+      }
+      return r;
+    };
+  })();
+
+  // Apply when pvBDSCRenderForm is called (it resets selected, then adds fixed)
+  (function(){
+    var origRF = window.pvBDSCRenderForm;
+    if(typeof origRF !== 'function') return;
+    window.pvBDSCRenderForm = function(){
+      applyStaticCoDinhToData();
+      return origRF.apply(this, arguments);
+    };
+  })();
+
+})();
+</script>
