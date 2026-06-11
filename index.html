@@ -14734,3 +14734,460 @@ nav=function(p){
   }
 }
 </style>
+<!-- V48 mobile UI fix: charts, taoPhieu layout, hoanThanhPhieu layout -->
+<style id="v48-mobile-comprehensive-fix">
+
+/* ═══════════════════════════════════════════════════
+   1. LAYOUT BASE — sidebar fixed, content full width
+═══════════════════════════════════════════════════ */
+@media (min-width: 769px) {
+  .layout { display: block !important; overflow: visible !important; position: relative !important; }
+  .sidebar {
+    position: fixed !important;
+    top: 54px !important; left: 0 !important; bottom: 0 !important;
+    width: 206px !important;
+    height: calc(100vh - 54px) !important;
+    z-index: 160 !important;
+    overflow-y: auto !important;
+  }
+  .content {
+    margin-left: 206px !important;
+    width: calc(100% - 206px) !important;
+    max-width: calc(100% - 206px) !important;
+    flex: none !important;
+    height: calc(100vh - 54px) !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    position: relative !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .layout { display: block !important; overflow: visible !important; }
+  .content {
+    margin-left: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    position: relative !important;
+    height: calc(100vh - 50px) !important;
+  }
+}
+
+/* ═══════════════════════════════════════════════════
+   2. CHART CONTAINERS — tất cả chart phải có height
+═══════════════════════════════════════════════════ */
+
+/* Mọi .cw (chart wrapper) đều cần min-height */
+.cw { position: relative; min-height: 200px; width: 100%; }
+.cw canvas { width: 100% !important; }
+
+/* Các chart trong vòng đời */
+#lc-charts-all .cw,
+#lc-charts-machine .cw,
+#lc-charts-part .cw,
+#lc-chart-freq,
+#lc-chart-avg,
+#lc-chart-trend,
+#lc-chart-mm-freq,
+#lc-chart-mm-life,
+#lc-chart-mm-trend,
+#lc-chart-mm-status,
+#lc-chart-pt-machines,
+#lc-chart-pt-life,
+#lc-chart-pt-trend,
+#lc-chart-pt-hist { display: block; }
+
+/* Các chart trong phân tích */
+#cw-ht-detail,
+#cw-lk-detail,
+#cw-cum-detail { position: relative; width: 100%; min-height: 200px; flex: 1; }
+
+/* Chart doughnut dashboard */
+#ch-phen-wrap, .cw:has(#ch-phen) { min-height: 180px; }
+
+/* ═══════════════════════════════════════════════════
+   3. MOBILE: CHART 2-COL → 1-COL
+═══════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+
+  /* Vòng đời: 2 cột biểu đồ → 1 cột */
+  #lc-charts-all > div[style*="grid-template-columns:1fr 1fr"],
+  #lc-charts-all > div[style*="grid-template-columns: 1fr 1fr"],
+  #lc-charts-machine > div[style*="grid-template-columns:1fr 1fr"],
+  #lc-charts-machine > div[style*="grid-template-columns: 1fr 1fr"],
+  #lc-charts-part > div[style*="grid-template-columns:1fr 1fr"],
+  #lc-charts-part > div[style*="grid-template-columns: 1fr 1fr"] {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+
+  /* Phân tích chuyên sâu: 2 cột → 1 cột */
+  #pg-analysis > div > div[style*="grid-template-columns:1fr 1fr"],
+  #pg-analysis > div > div[style*="grid-template-columns: 1fr 1fr"],
+  #pg-analysis .cg2,
+  .cg2 {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+
+  /* Giảm chart height trên mobile */
+  #lc-charts-all [style*="height:260px"] { height: 220px !important; }
+  #lc-charts-all [style*="height:200px"] { height: 180px !important; }
+  #lc-charts-machine [style*="height:280px"],
+  #lc-charts-part [style*="height:280px"] { height: 220px !important; }
+  #lc-charts-machine [style*="height:200px"],
+  #lc-charts-part [style*="height:200px"] { height: 170px !important; }
+  #cw-ht-detail,
+  #cw-lk-detail,
+  #cw-cum-detail { min-height: 180px !important; }
+
+  /* Phân tích: chart wrappers */
+  #pg-analysis [style*="position:relative;flex:1;min-height:200px"],
+  #pg-analysis [style*="position:relative;flex:1"] {
+    min-height: 180px !important;
+    height: auto !important;
+  }
+
+  /* Xu hướng chart */
+  #pg-analysis .cw { min-height: 180px !important; }
+
+  /* Phân tích: 3-col grid → 1 col */
+  #pg-analysis [style*="grid-template-columns:1fr 1fr 1fr"],
+  #pg-analysis [style*="grid-template-columns: 1fr 1fr 1fr"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Phân tích bộ lọc thanh fbar */
+  #pg-analysis .fbar {
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+  }
+  #pg-analysis #an-dv,
+  #pg-analysis #an-mm { width: 100% !important; font-size: 13px !important; }
+  #pg-analysis .fbar > div[style*="position:relative"] { width: 100% !important; }
+  #pg-analysis .fbar .btn { flex: 1 1 45% !important; font-size: 12px !important; padding: 8px 6px !important; }
+  #pg-analysis .fbar > div[style*="width:1px"] { display: none !important; }
+
+  /* Vòng đời bộ lọc fbar */
+  #pg-lifecycle .fbar {
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+  }
+  #pg-lifecycle #lc-mm,
+  #pg-lifecycle #lc-vt { width: 100% !important; font-size: 13px !important; }
+  #pg-lifecycle .fbar > div[style*="position:relative"] { width: 100% !important; }
+  #pg-lifecycle .fbar .prbtn {
+    flex: 1 1 44% !important;
+    font-size: 11px !important;
+    padding: 6px 4px !important;
+    text-align: center !important;
+  }
+  #pg-lifecycle .fbar > div[style*="margin-left:auto"] {
+    width: 100% !important;
+    flex-wrap: wrap !important;
+    margin-left: 0 !important;
+    gap: 6px !important;
+  }
+  #pg-lifecycle .fbar > div[style*="margin-left:auto"] .btn {
+    flex: 1 1 45% !important;
+    font-size: 12px !important;
+    padding: 8px 6px !important;
+  }
+
+  /* KPI grid vòng đời */
+  #lc-kpi {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px !important;
+  }
+
+  /* Vòng đời table */
+  #pg-lifecycle [style*="overflow-x:auto"] table,
+  #pg-lifecycle [style*="min-width:1000px"] { min-width: 700px !important; font-size: 11px !important; }
+
+/* ═══════════════════════════════════════════════════
+   4. TẠO PHIẾU XUẤT — fix lệch phải trên mobile
+═══════════════════════════════════════════════════ */
+
+  #pg-taoPhieu {
+    padding: 10px 10px !important;
+    margin: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    overflow-x: hidden !important;
+  }
+  #pvFormRoot,
+  #pvb_formWrap {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    overflow-x: hidden !important;
+  }
+
+  /* Section cards */
+  #pvb_formWrap .fsec,
+  #pvb_formWrap .card {
+    width: 100% !important;
+    box-sizing: border-box !important;
+    padding: 12px !important;
+    border-radius: 10px !important;
+    margin-bottom: 10px !important;
+  }
+
+  /* Form grids: tất cả 1 cột */
+  #pvb_formWrap .fgrid,
+  #pvb_formWrap .fg2,
+  #pvb_formWrap .fg3,
+  #pvb_formWrap [class*="fgrid"],
+  #pvb_formWrap [style*="grid-template-columns"] {
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+  }
+  #pvb_formWrap .full { grid-column: 1 !important; }
+
+  /* Inputs */
+  #pvb_formWrap input.inp,
+  #pvb_formWrap select.inp,
+  #pvb_formWrap textarea.ta {
+    width: 100% !important;
+    font-size: 14px !important;
+    padding: 10px 11px !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Machine section v17 */
+  .pv17-grid,
+  .pv17-machine-card { width: 100% !important; box-sizing: border-box !important; }
+  .pv17-grid { grid-template-columns: 1fr !important; gap: 6px !important; }
+  .pv17-grid .full { grid-column: 1 !important; }
+
+  /* Vật tư selected list */
+  #pvb_selectedItems {
+    max-height: 320px !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+  #pvb_selectedItems > div {
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+    padding: 8px 10px !important;
+    align-items: flex-start !important;
+  }
+  #pvb_selectedItems > div > div[style*="min-width"] {
+    min-width: 0 !important;
+    flex: 1 1 100% !important;
+  }
+  /* Type select */
+  #pvb_selectedItems select,
+  #pvb_selectedItems [class*="type-sel"],
+  #pvb_selectedItems [class*="type-select"] {
+    width: 100% !important;
+    max-width: none !important;
+    font-size: 12px !important;
+    flex: 1 1 100% !important;
+  }
+  /* Qty inputs */
+  #pvb_selectedItems input[type="number"] {
+    width: 64px !important;
+    flex-shrink: 0 !important;
+  }
+
+  /* Search vật tư */
+  #pvb_vatTuSearchList {
+    max-height: 360px !important;
+    overflow-y: auto !important;
+  }
+  #pvb_vatTuSearchList .pi-row {
+    flex-wrap: wrap !important;
+    gap: 5px !important;
+    padding: 8px 10px !important;
+    align-items: flex-start !important;
+  }
+  #pvb_vatTuSearchList [class*="search-row-name"],
+  #pvb_vatTuSearchList label { flex: 1 1 100% !important; }
+
+  /* Hiện tượng chips */
+  #pvb_htChips, #pvb_htChipsSel { flex-wrap: wrap !important; gap: 5px !important; }
+
+  /* Action buttons cuối form */
+  #pvb_formWrap .pv-actions,
+  #pvb_formWrap [style*="display:flex;gap:9px"],
+  #pvb_formWrap [style*="display: flex; gap: 9px"] {
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+  }
+  #pvb_formWrap .pv-actions .btn,
+  #pvb_formWrap > div:last-child .btn {
+    flex: 1 1 auto !important;
+    font-size: 13px !important;
+    padding: 10px 10px !important;
+    text-align: center !important;
+  }
+
+/* ═══════════════════════════════════════════════════
+   5. HOÀN THÀNH PHIẾU — bố cục lại đẹp hơn
+═══════════════════════════════════════════════════ */
+
+  #pg-hoanThanhPhieu {
+    padding: 10px 10px !important;
+    margin: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+  #pvCompleteRoot,
+  #pvCompleteRoot .card { width: 100% !important; box-sizing: border-box !important; }
+
+  /* KPI row: 2x2 grid */
+  #pv-kpi-row {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px !important;
+    margin-bottom: 10px !important;
+  }
+  #pv-kpi-row > div {
+    padding: 10px 8px !important;
+    border-radius: 8px !important;
+  }
+  #pv-kpi-row > div > div:first-child { font-size: 22px !important; }
+  #pv-kpi-row > div > div:last-child { font-size: 9px !important; }
+
+  /* Charts tần suất + phân bổ: 1 cột */
+  #pv-overview-card > div:last-child,
+  #pvCompleteRoot [style*="grid-template-columns:1fr 1fr"],
+  #pvCompleteRoot [style*="grid-template-columns: 1fr 1fr"] {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+  /* Chart canvas heights */
+  #pv-daily-chart { min-height: 140px !important; }
+  #pv-purpose-chart { min-height: 160px !important; }
+  /* Doughnut: legend bên dưới */
+  #pv-purpose-chart + * .chartjs-legend { flex-direction: row !important; flex-wrap: wrap !important; }
+
+  /* Danh sách phiếu: scroll ngang */
+  #pvCompleteRoot .tblwrap {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    border-radius: 8px !important;
+  }
+  #pvCompleteRoot table.tbl {
+    min-width: 680px !important;
+    font-size: 11px !important;
+  }
+  #pvCompleteRoot .tbl td,
+  #pvCompleteRoot .tbl th {
+    padding: 6px 7px !important;
+    white-space: nowrap !important;
+  }
+  /* Action buttons trong table */
+  #pvCompleteRoot .pv19-actions,
+  #pvCompleteRoot .pv18-actions {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 3px !important;
+  }
+  #pvCompleteRoot .pv19-actions .btn,
+  #pvCompleteRoot .pv18-actions .btn {
+    font-size: 10px !important;
+    padding: 3px 6px !important;
+  }
+
+  /* Form cập nhật hoàn thành */
+  .pv18-form-grid { grid-template-columns: 1fr !important; gap: 8px !important; }
+  .pv18-scroll,
+  .pv17-scroll { overflow-x: auto !important; -webkit-overflow-scrolling: touch !important; }
+  #pv18_complete_table,
+  #pv17_complete_table,
+  #pv16_complete_table {
+    min-width: 680px !important;
+    font-size: 11px !important;
+  }
+  #pv18_complete_table td,
+  #pv17_complete_table td,
+  #pv16_complete_table td,
+  #pv18_complete_table th,
+  #pv17_complete_table th,
+  #pv16_complete_table th { padding: 5px 5px !important; }
+  .pv18-form-actions,
+  #pvCompleteRoot .pv17-actions {
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+    padding-top: 10px !important;
+  }
+  .pv18-form-actions .btn,
+  #pvCompleteRoot .pv17-actions .btn {
+    flex: 1 1 auto !important;
+    text-align: center !important;
+    font-size: 13px !important;
+    padding: 10px !important;
+  }
+
+} /* end @media max-width:768px */
+
+/* ═══════════════════════════════════════════════════
+   6. CHART CANVAS — đảm bảo không bị 0-height
+   Áp dụng cho tất cả màn hình
+═══════════════════════════════════════════════════ */
+canvas {
+  display: block;
+  max-width: 100%;
+}
+/* Wrapper cho chart trong vòng đời */
+#lc-charts-all .cc,
+#lc-charts-machine .cc,
+#lc-charts-part .cc {
+  overflow: hidden;
+  min-height: 0;
+}
+/* Chart containers có height cố định */
+[style*="position:relative;height:260px"],
+[style*="position:relative;height:280px"],
+[style*="position:relative;height:200px"],
+[style*="position:relative;height:160px"] {
+  overflow: hidden;
+}
+
+</style>
+
+<script id="v48-chart-resize-fix">
+(function(){
+  /* Đảm bảo biểu đồ Chart.js resize đúng sau khi page hiển thị
+     đặc biệt trên mobile khi layout thay đổi */
+  function resizeAllCharts(){
+    if(typeof Chart === 'undefined') return;
+    Object.values(Chart.instances || {}).forEach(function(c){
+      try { c.resize(); } catch(e){}
+    });
+  }
+  // Resize khi chuyển trang
+  const _origNav = typeof window.nav === 'function' ? window.nav : null;
+  if(_origNav){
+    window.nav = function(p){
+      const r = _origNav(p);
+      setTimeout(resizeAllCharts, 120);
+      setTimeout(resizeAllCharts, 400);
+      return r;
+    };
+  }
+  // Resize khi window resize
+  let _resizeTimer;
+  window.addEventListener('resize', function(){
+    clearTimeout(_resizeTimer);
+    _resizeTimer = setTimeout(resizeAllCharts, 150);
+  });
+  // Resize sau khi load
+  window.addEventListener('load', function(){ setTimeout(resizeAllCharts, 300); });
+  // Patch purpose chart legend to show below on small screen
+  window.addEventListener('resize', function(){
+    const cvP = document.getElementById('pv-purpose-chart');
+    if(cvP && window._pvPurposeChart && window.innerWidth <= 768){
+      try{
+        window._pvPurposeChart.options.plugins.legend.position = 'bottom';
+        window._pvPurposeChart.update('none');
+      }catch(e){}
+    }
+  });
+})();
+</script>
