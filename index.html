@@ -11506,163 +11506,125 @@ nav=function(p){
 
 })();
 </script>
-
-<!-- EGREEN PATCH: An danh sach vat tu da chon va vat tu co dinh khoi khung chon them -->
 <script>
-(function(){
-  'use strict';
-  if (window.__EGREEN_VATTU_FILTER_FIX_20260610__) return;
-  window.__EGREEN_VATTU_FILTER_FIX_20260610__ = true;
+/* ═══════════════════════════════════════════════════════════
+ * PATCH: Vật tư cố định tĩnh + ẩn khỏi search list
+ * ═══════════════════════════════════════════════════════════ */
+(function() {
 
-  function n(s){
-    try { if (typeof window.pvNorm === 'function') return window.pvNorm(s); } catch(e) {}
-    return String(s || '')
-      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-      .replace(/đ/g, 'd').replace(/Đ/g, 'D')
-      .toLowerCase().replace(/\s+/g, ' ').trim();
+  var FIXED_DATA = [
+    {cum:'Công cụ, thiết bị',          ten:'Bộ khẩu (8-32 - có khẩu tuýp 16)',           loai:[]},
+    {cum:'Công cụ, thiết bị',          ten:'Bộ cờ lê (8-32)',                              loai:[]},
+    {cum:'Công cụ, thiết bị',          ten:'Tua vít 2 cạnh, 4 cạnh (to, nhỏ)',             loai:[]},
+    {cum:'Công cụ, thiết bị',          ten:'Bộ lục lăng',                                  loai:[]},
+    {cum:'Công cụ, thiết bị',          ten:'Đồng hồ đo điện',                              loai:[]},
+    {cum:'Công cụ, thiết bị',          ten:'Đồng hồ đo xung Hantek',                       loai:[]},
+    {cum:'Công cụ, thiết bị',          ten:'Máy nội soi',                                  loai:[]},
+    {cum:'Công cụ, thiết bị',          ten:'Máy cắt cầm tay',                              loai:[]},
+    {cum:'Công cụ, thiết bị',          ten:'Bộ súng pin',                                  loai:[]},
+    {cum:'Công cụ, thiết bị',          ten:'Đồng hồ đo áp suất buồng đốt',                loai:[]},
+    {cum:'Công cụ, thiết bị',          ten:'Đồng hồ đo áp suất nhớt cơ',                  loai:[]},
+    {cum:'Công cụ, thiết bị',          ten:'Bộ đột gioăng',                                loai:[]},
+    {cum:'Công cụ, thiết bị',          ten:'Kìm tuốt, bóp cos dây điện',                   loai:[]},
+    {cum:'Công cụ, thiết bị',          ten:'Bộ cos các loại',                               loai:[]},
+    {cum:'Điều khiển động lực',        ten:'Relay trung gian 24VDC 10A 8 chân',            loai:[]},
+    {cum:'Điều khiển động lực',        ten:'Đế Relay trung gian 24VDC 10A 8 chân',         loai:[]},
+    {cum:'Nguồn DC',                   ten:'Công tắc xoay',                                 loai:[]},
+    {cum:'Hệ thống đánh lửa',         ten:'Bugi',                                          loai:['BKR6E','DCPR8E','Mar10A-J 4706','BP6ES']},
+    {cum:'Hệ thống đánh lửa',         ten:'Bobin',                                         loai:[]},
+    {cum:'Hệ thống đánh lửa',         ten:'Giắc bobin',                                    loai:[]},
+    {cum:'Hệ thống đánh lửa',         ten:'Núm cao su',                                    loai:[]},
+    {cum:'Hệ thống đánh lửa',         ten:'Long đen nhôm',                                 loai:[]},
+    {cum:'Hệ thống đánh lửa',         ten:'Mạch đánh lửa',                                 loai:[]},
+    {cum:'Hệ thống đánh lửa',         ten:'Cảm biến đánh lửa (tiệm cận Pr08-2dp)',        loai:[]},
+    {cum:'Hệ thống đánh lửa',         ten:'Mạch hạ áp 24VDC-12VDC 30A',                   loai:[]},
+    {cum:'Cảm biến / tín hiệu',       ten:'Cảm biến nước',                                 loai:[]},
+    {cum:'Cảm biến / tín hiệu',       ten:'Cảm biến nhớt',                                 loai:[]},
+    {cum:'Điều tốc / điều khiển tải', ten:'Pickup',                                        loai:[]},
+    {cum:'Điều tốc / điều khiển tải', ten:'Rotuyn',                                        loai:[]},
+    {cum:'Nguồn điện 3 pha',          ten:'AVR SX440',                                      loai:[]},
+    {cum:'Hệ thống khởi động',        ten:'Relay đề',                                       loai:[]},
+    {cum:'Hệ thống khởi động',        ten:'Relay thời gian 24VDC 10A 8 chân',              loai:[]},
+    {cum:'Hệ thống khởi động',        ten:'Đế relay thời gian 24VDC 10A 8 chân',           loai:[]},
+    {cum:'Hệ thống nạp, xả, tăng áp', ten:'Bầu lọc gió / Cụm lọc gió',                   loai:['LỌC GIÓ 6D105(AS1024)','A-6465A (Nitco)','A-6117-S','Lọc gió A6117S','Lọc gió Donaldson P532473','P831197']},
+    {cum:'Hệ thống nạp, xả, tăng áp', ten:'Đế relay trung gian 8 chân',                   loai:[]},
+    {cum:'Hệ thống bôi trơn',         ten:'Lưới lọc thô các-te (Phao lọc nhớt)',           loai:[]},
+    {cum:'Hệ thống bôi trơn',         ten:'Lọc nhớt 1',                                    loai:['C-5602','T-5121','LF9009','Lọc nhớt Sakura O-18051','WF2072','Lọc nhớt Sakura O-1808','Lọc nhớt Sakura O-1809','Lọc nhớt Sakura O-1804','Lọc nhớt Sakura O-1806']},
+    {cum:'Hệ thống bôi trơn',         ten:'Lọc nhớt 2',                                    loai:['C-5602','T-5121','LF9009','Lọc nhớt Sakura O-18051','WF2072','Lọc nhớt Sakura O-1808','Lọc nhớt Sakura O-1809','Lọc nhớt Sakura O-1804','Lọc nhớt Sakura O-1806']},
+    {cum:'Vật tư, chi tiết máy',      ten:'Dây đồng 1x1.0',                                loai:[]},
+    {cum:'Vật tư, chi tiết máy',      ten:'Dây đồng 1x2.5',                                loai:[]},
+    {cum:'Vật tư, chi tiết máy',      ten:'Băng dính điện',                                 loai:[]},
+    {cum:'Vật tư, chi tiết máy',      ten:'Bìa amiang',                                     loai:[]},
+  ];
+
+  /* Set tên vật tư cố định (dùng để filter nhanh) */
+  var FIXED_NAMES = new Set(FIXED_DATA.map(function(x) {
+    return x.ten.toLowerCase().trim();
+  }));
+
+  function getTenVatTu(x) {
+    if (typeof pvTenVatTu === 'function') return pvTenVatTu(x);
+    return String(x['Tên Chi Tiết / Linh Kiện Thay Thế'] || x['Tên vật tư'] || x.tenVatTu || '');
   }
-  function get(o, keys){
-    o = o || {};
-    for (var i = 0; i < keys.length; i++) {
-      if (o[keys[i]] !== undefined && o[keys[i]] !== null && String(o[keys[i]]).trim() !== '') return o[keys[i]];
-    }
-    return '';
+
+  function buildStaticCoDinh() {
+    return FIXED_DATA.map(function(x) {
+      return {
+        'Cụm Linh Kiện': x.cum,
+        'Tên Chi Tiết / Linh Kiện Thay Thế': x.ten,
+        'Các loại': x.loai.join('\n'),
+        _loaiArr: x.loai
+      };
+    });
   }
-  function ten(o){
-    try { if (typeof window.pvTenVatTu === 'function') return String(window.pvTenVatTu(o) || '').trim(); } catch(e) {}
-    return String(get(o, ['Tên Chi Tiết / Linh Kiện Thay Thế','Tên chi tiết / linh kiện thay thế','Tên vật tư','Hạng mục vật tư','tenVatTu','lk']) || '').trim();
-  }
-  function cum(o){
-    try { if (typeof window.pvCum === 'function') return String(window.pvCum(o) || '').trim(); } catch(e) {}
-    return String(get(o, ['Cụm Linh Kiện','Cụm linh kiện','cumLinhKien','cum']) || '').trim();
-  }
-  function ma(o){
-    return String(get(o, ['Mã vật tư','Ma vat tu','maVatTu']) || '').trim();
-  }
-  function idOf(o){
-    try { if (typeof window.pvMatId === 'function') return String(window.pvMatId(o) || '').trim(); } catch(e) {}
-    return n(cum(o) + '|' + ten(o) + '|' + ma(o));
-  }
-  function nameKey(o){
-    return n(cum(o) + '|' + ten(o));
-  }
-  function isFixedRow(o){
-    o = o || {};
-    return o.fixed === true || n(o.nguonVatTu || o['Nguồn vật tư'] || '').indexOf('co dinh') >= 0;
-  }
-  function ensureSelectedArray(){
-    if (!window.PV) window.PV = {data:{}};
-    if (!PV.data) PV.data = {};
-    if (!Array.isArray(PV.data.selected)) PV.data.selected = [];
-  }
-  function tryAddFixed(){
-    ensureSelectedArray();
-    try {
-      if (typeof window.pvBDSCAddFixed === 'function') window.pvBDSCAddFixed();
-    } catch(e) {
-      console.warn('[EGREEN VAT TU FILTER] Khong the add vat tu co dinh truoc khi render', e);
-    }
-  }
-  function buildHiddenIndex(){
-    ensureSelectedArray();
-    var out = { ids:{}, names:{}, fixedIds:{}, fixedNames:{} };
-    (PV.data.selected || []).forEach(function(x){
-      var id = idOf(x), nk = nameKey(x);
-      if (id) out.ids[id] = true;
-      if (nk) out.names[nk] = true;
-      if (isFixedRow(x)) {
-        if (id) out.fixedIds[id] = true;
-        if (nk) out.fixedNames[nk] = true;
+
+  /* Inject vatTuCoDinh tĩnh nếu chưa có */
+  function ensureStaticCoDinh() {
+    if (window.PV && window.PV.data) {
+      if (!PV.data.vatTuCoDinh || !PV.data.vatTuCoDinh.length) {
+        PV.data.vatTuCoDinh = buildStaticCoDinh();
       }
-    });
-    (PV.data.vatTuCoDinh || []).forEach(function(x){
-      var id = idOf(x), nk = nameKey(x);
-      if (id) out.fixedIds[id] = true;
-      if (nk) out.fixedNames[nk] = true;
-    });
-    return out;
-  }
-  function shouldHideMaterial(x){
-    var idx = buildHiddenIndex();
-    var id = idOf(x), nk = nameKey(x);
-    return !!(idx.ids[id] || idx.names[nk] || idx.fixedIds[id] || idx.fixedNames[nk]);
-  }
-  function filterSelectableList(list){
-    var seen = {};
-    return (list || []).filter(function(x){
-      if (!ten(x)) return false;
-      if (shouldHideMaterial(x)) return false;
-      var k = idOf(x) || nameKey(x);
-      if (seen[k]) return false;
-      seen[k] = true;
-      return true;
-    });
-  }
-
-  var oldBDSCSelectable = typeof window.pvBDSCSelectable === 'function' ? window.pvBDSCSelectable : null;
-  window.pvBDSCSelectable = function(){
-    var base = [];
-    try {
-      base = oldBDSCSelectable ? oldBDSCSelectable.apply(this, arguments) : ((window.PV && PV.data && PV.data.vatTu) || []);
-    } catch(e) {
-      base = (window.PV && PV.data && PV.data.vatTu) || [];
     }
-    return filterSelectableList(base);
-  };
-
-  var oldBDSCRenderSearch = typeof window.pvBDSCRenderVatTuSearch === 'function' ? window.pvBDSCRenderVatTuSearch : null;
-  if (oldBDSCRenderSearch) {
-    window.pvBDSCRenderVatTuSearch = function(){
-      tryAddFixed();
-      return oldBDSCRenderSearch.apply(this, arguments);
-    };
   }
 
-  var oldBDSCSelectMaterial = typeof window.pvBDSCSelectMaterial === 'function' ? window.pvBDSCSelectMaterial : null;
-  if (oldBDSCSelectMaterial) {
-    window.pvBDSCSelectMaterial = function(id, checked){
-      if (!checked) return oldBDSCSelectMaterial.apply(this, arguments);
-      var x = ((window.PV && PV.data && PV.data.vatTu) || []).find(function(v){ return idOf(v) === id; });
-      if (x && shouldHideMaterial(x)) {
-        try { if (typeof window.toast === 'function') window.toast('Vật tư này đã có trong danh sách đã chọn hoặc là vật tư cố định.', 'warn'); } catch(e) {}
-        try { if (typeof window.pvBDSCRenderVatTuSearch === 'function') window.pvBDSCRenderVatTuSearch(); } catch(e) {}
-        try { if (typeof window.pvBDSCRenderSelected === 'function') window.pvBDSCRenderSelected(); } catch(e) {}
-        return;
-      }
-      return oldBDSCSelectMaterial.apply(this, arguments);
+  /* Bọc pvBDSCAddFixed */
+  function installAddFixed() {
+    if (typeof window.pvBDSCAddFixed !== 'function') return;
+    if (window.pvBDSCAddFixed._patched) return;
+    var orig = window.pvBDSCAddFixed;
+    window.pvBDSCAddFixed = function() {
+      ensureStaticCoDinh();
+      orig();
     };
+    window.pvBDSCAddFixed._patched = true;
   }
 
-  /* Dong bo cho module phieu vat tu cu neu trang dang dung cac ham pv* */
-  var oldPVSelectable = typeof window.pvSelectable === 'function' ? window.pvSelectable : null;
-  if (oldPVSelectable) {
-    window.pvSelectable = function(){
-      var base = [];
-      try { base = oldPVSelectable.apply(this, arguments); } catch(e) { base = ((window.PV && PV.data && PV.data.vatTu) || []); }
-      return filterSelectableList(base);
+  /* Bọc pvBDSCSelectable — lọc bỏ vật tư cố định khỏi danh sách tìm kiếm */
+  function installSelectable() {
+    if (typeof window.pvBDSCSelectable !== 'function') return;
+    if (window.pvBDSCSelectable._patched) return;
+    var orig = window.pvBDSCSelectable;
+    window.pvBDSCSelectable = function() {
+      var list = orig();
+      return list.filter(function(x) {
+        return !FIXED_NAMES.has(getTenVatTu(x).toLowerCase().trim());
+      });
     };
-  }
-  var oldPVRenderSearch = typeof window.pvRenderVatTuSearch === 'function' ? window.pvRenderVatTuSearch : null;
-  if (oldPVRenderSearch) {
-    window.pvRenderVatTuSearch = function(){
-      tryAddFixed();
-      return oldPVRenderSearch.apply(this, arguments);
-    };
-  }
-  var oldPVSelectMaterial = typeof window.pvSelectMaterial === 'function' ? window.pvSelectMaterial : null;
-  if (oldPVSelectMaterial) {
-    window.pvSelectMaterial = function(id, checked){
-      if (!checked) return oldPVSelectMaterial.apply(this, arguments);
-      var x = ((window.PV && PV.data && PV.data.vatTu) || []).find(function(v){ return idOf(v) === id; });
-      if (x && shouldHideMaterial(x)) return;
-      return oldPVSelectMaterial.apply(this, arguments);
-    };
+    window.pvBDSCSelectable._patched = true;
   }
 
-  /* Render lai neu form da mo truoc khi patch duoc cai */
-  setTimeout(function(){
-    try { if (typeof window.pvBDSCRenderVatTuSearch === 'function') window.pvBDSCRenderVatTuSearch(); } catch(e) {}
-    try { if (typeof window.pvBDSCRenderSelected === 'function') window.pvBDSCRenderSelected(); } catch(e) {}
+  function applyPatches() {
+    ensureStaticCoDinh();
+    installAddFixed();
+    installSelectable();
+  }
+
+  applyPatches();
+  var t = setInterval(function() {
+    if (window.pvBDSCAddFixed && !window.pvBDSCAddFixed._patched)     installAddFixed();
+    if (window.pvBDSCSelectable && !window.pvBDSCSelectable._patched) installSelectable();
   }, 300);
+  setTimeout(function() { clearInterval(t); }, 30000);
+
 })();
 </script>
