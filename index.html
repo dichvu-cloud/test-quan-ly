@@ -14357,3 +14357,380 @@ nav=function(p){
 
 })();
 </script>
+
+<!-- ═══════════════════════════════════════════════════════
+  PATCH v47 - MOBILE UI: Tạo phiếu, Hoàn thành phiếu, Phân tích, Vòng đời
+  Target: ~390px width (phone portrait)
+═══════════════════════════════════════════════════════ -->
+<style id="pv47-mobile">
+@media (max-width: 768px) {
+
+  /* ══════════════════════════════════════════
+     1. VÒNG ĐỜI (pg-lifecycle)
+  ══════════════════════════════════════════ */
+
+  /* Filter bar: xếp dọc, 2 input full width */
+  #pg-lifecycle .fbar {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 8px !important;
+    padding: 10px 12px !important;
+  }
+  #pg-lifecycle .fbar > div[style*="position:relative"] {
+    width: 100% !important;
+  }
+  #pg-lifecycle #lc-mm,
+  #pg-lifecycle #lc-vt {
+    width: 100% !important;
+    font-size: 13px !important;
+    padding: 9px 10px !important;
+  }
+  /* Sort buttons: wrap thành 2 cột */
+  #pg-lifecycle .fbar .prbtn {
+    flex: 1 1 45% !important;
+    text-align: center !important;
+    font-size: 11px !important;
+    padding: 6px 8px !important;
+  }
+  /* Action buttons row (margin-left:auto group) */
+  #pg-lifecycle .fbar > div[style*="margin-left:auto"] {
+    margin-left: 0 !important;
+    width: 100% !important;
+    justify-content: flex-end !important;
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+  }
+  /* KPI grid: 3 cột → giữ nguyên nhưng shrink font */
+  #lc-kpi {
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 6px !important;
+  }
+  /* Charts: 2 cột → 1 cột */
+  #pg-lifecycle #lc-charts-section [style*="grid-template-columns:1fr 1fr"],
+  #pg-lifecycle #lc-charts-section [style*="grid-template-columns: 1fr 1fr"] {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+  /* Chart height giảm trên mobile */
+  #pg-lifecycle #lc-charts-section [style*="height:260px"],
+  #pg-lifecycle #lc-charts-section [style*="height:280px"] {
+    height: 220px !important;
+  }
+  #pg-lifecycle #lc-charts-section [style*="height:200px"] {
+    height: 180px !important;
+  }
+  /* Trend filter select full width */
+  #lc-trend-vt {
+    width: 100% !important;
+    max-width: none !important;
+    font-size: 12px !important;
+  }
+  /* Table scroll */
+  #pg-lifecycle .tblwrap, #pg-lifecycle [class*="tbl"] {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+  /* Bảng định mức: compact font */
+  #pg-lifecycle table { font-size: 11px !important; }
+  #pg-lifecycle td, #pg-lifecycle th { padding: 5px 6px !important; }
+
+  /* ══════════════════════════════════════════
+     2. PHÂN TÍCH (pg-analysis)
+  ══════════════════════════════════════════ */
+
+  /* Filter bar: xếp dọc */
+  #pg-analysis .fbar {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 8px !important;
+    padding: 10px 12px !important;
+  }
+  /* Period buttons: 3 cột */
+  #pg-analysis .fbar .prbtn {
+    flex: 1 1 30% !important;
+    text-align: center !important;
+    font-size: 11px !important;
+    padding: 6px 4px !important;
+  }
+  #pg-analysis .fbar > div[style*="width:1px"] { display: none !important; }
+  /* Date inputs full width */
+  #pg-analysis #dFrom,
+  #pg-analysis #dTo {
+    width: 100% !important;
+  }
+  #pg-analysis #customRange {
+    width: 100% !important;
+    flex-direction: column !important;
+    gap: 6px !important;
+  }
+  /* Search inputs full width */
+  #pg-analysis #an-dv,
+  #pg-analysis #an-mm {
+    width: 100% !important;
+    font-size: 13px !important;
+  }
+  #pg-analysis .fbar > div[style*="position:relative"] {
+    width: 100% !important;
+  }
+  /* Update button full width */
+  #pg-analysis .fbar .btn {
+    width: 100% !important;
+    font-size: 13px !important;
+    padding: 9px 10px !important;
+  }
+  /* Main 2-column charts → 1 column */
+  #pg-analysis .cg2 {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+  /* Phân tích chuyên sâu: 2 cột → 1 cột */
+  #pg-analysis [style*="grid-template-columns:1fr 1fr"],
+  #pg-analysis [style*="grid-template-columns: 1fr 1fr"] {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+  /* KTV section */
+  #pg-analysis [style*="grid-template-columns:1fr 1fr 1fr"] {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+  /* Table trong phân tích: scroll ngang */
+  #pg-analysis .tw,
+  #pg-analysis [id*="an-unit-table"],
+  #pg-analysis [id*="ktv-table"] {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+  #pg-analysis table { font-size: 11px !important; min-width: 500px; }
+  #pg-analysis td, #pg-analysis th { padding: 6px 7px !important; white-space: nowrap; }
+
+  /* ══════════════════════════════════════════
+     3. TẠO PHIẾU XUẤT VẬT TƯ (pg-taoPhieu)
+  ══════════════════════════════════════════ */
+
+  #pg-taoPhieu {
+    padding: 10px 10px !important;
+  }
+  /* Section cards */
+  #pvb_formWrap .fsec {
+    padding: 12px 12px !important;
+    border-radius: 10px !important;
+    margin-bottom: 10px !important;
+  }
+  /* Form grids: 1 cột */
+  #pvb_formWrap .fgrid,
+  #pvb_formWrap .fg2,
+  #pvb_formWrap .fg3 {
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+  }
+  /* Machine section cards */
+  #pvb_formWrap .iw { margin-bottom: 4px !important; }
+  #pvb_formWrap input.inp,
+  #pvb_formWrap select.inp,
+  #pvb_formWrap textarea.ta {
+    font-size: 14px !important;
+    padding: 10px 11px !important;
+    border-radius: 9px !important;
+  }
+  /* Vật tư selected: full width với scrollable */
+  #pvb_selectedItems > div {
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+    padding: 8px 10px !important;
+  }
+  #pvb_selectedItems > div > div[style*="min-width:140px"] {
+    min-width: 0 !important;
+    flex: 1 1 100% !important;
+  }
+  /* Type select in selected list */
+  #pvb_selectedItems .pv26-type-select,
+  #pvb_selectedItems .pv44-type-sel,
+  #pvb_selectedItems .pv45-type-sel {
+    min-width: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    font-size: 12px !important;
+    flex: 1 1 100% !important;
+  }
+  /* Qty + status in same row */
+  #pvb_selectedItems input[type=number] {
+    width: 60px !important;
+    flex-shrink: 0 !important;
+  }
+  /* Search list: limit height */
+  #pvb_vatTuSearchList {
+    max-height: 380px !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+  /* Search row: wrap items */
+  #pvb_vatTuSearchList .pi-row {
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+    padding: 8px 10px !important;
+  }
+  #pvb_vatTuSearchList .pv26-search-row-name {
+    flex: 1 1 100% !important;
+    min-width: 0 !important;
+  }
+  /* Type select trong search: full width */
+  #pvb_vatTuSearchList .pv26-type-select {
+    width: 100% !important;
+    max-width: none !important;
+    font-size: 12px !important;
+  }
+  /* Action buttons sticky */
+  #pvb_formWrap > div:last-child,
+  #pvb_formWrap [style*="display:flex;gap:9px"] {
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+    padding-bottom: 20px !important;
+  }
+  #pvb_formWrap .btn {
+    flex: 1 1 auto !important;
+    font-size: 13px !important;
+    padding: 11px 10px !important;
+    text-align: center !important;
+  }
+
+  /* ══════════════════════════════════════════
+     4. HOÀN THÀNH PHIẾU VẬT TƯ (pg-hoanThanhPhieu)
+  ══════════════════════════════════════════ */
+
+  #pg-hoanThanhPhieu {
+    padding: 10px 10px !important;
+  }
+
+  /* KPI 4 cột → 2 cột */
+  #pv-kpi-row {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px !important;
+  }
+  #pv-kpi-row > div {
+    padding: 10px 8px !important;
+  }
+  #pv-kpi-row > div > div:first-child {
+    font-size: 22px !important;
+  }
+  #pv-kpi-row > div > div:last-child {
+    font-size: 9px !important;
+  }
+
+  /* Charts 2 cột → 1 cột */
+  #pvCompleteRoot [style*="grid-template-columns:1fr 1fr"],
+  #pvCompleteRoot [style*="grid-template-columns: 1fr 1fr"] {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+  /* Chart heights giảm */
+  #pv-daily-chart,
+  #pv-purpose-chart {
+    height: 160px !important;
+  }
+  #pvCompleteRoot [style*="height:160px"] {
+    height: 140px !important;
+  }
+  /* Danh sách phiếu: scroll ngang */
+  #pvCompleteRoot .tblwrap {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+  #pvCompleteRoot table.tbl {
+    min-width: 700px !important;
+    font-size: 11px !important;
+  }
+  #pvCompleteRoot .tbl td,
+  #pvCompleteRoot .tbl th {
+    padding: 6px 7px !important;
+    white-space: nowrap !important;
+  }
+  /* Action buttons in table: stack */
+  #pvCompleteRoot .pv19-actions {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 3px !important;
+  }
+  #pvCompleteRoot .pv19-actions .btn {
+    font-size: 10px !important;
+    padding: 3px 6px !important;
+  }
+
+  /* Form hoàn thành phiếu (pv18) */
+  .pv18-form-grid {
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+  }
+  .pv18-scroll {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+  #pv18_complete_table,
+  #pv17_complete_table,
+  #pv16_complete_table {
+    min-width: 700px !important;
+    font-size: 11px !important;
+  }
+  #pv18_complete_table td,
+  #pv17_complete_table td,
+  #pv16_complete_table td,
+  #pv18_complete_table th,
+  #pv17_complete_table th,
+  #pv16_complete_table th {
+    padding: 5px 5px !important;
+  }
+  .pv18-form-actions {
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+    padding-top: 10px !important;
+  }
+  .pv18-form-actions .btn {
+    flex: 1 1 auto !important;
+    text-align: center !important;
+    font-size: 13px !important;
+    padding: 10px !important;
+  }
+
+  /* ══════════════════════════════════════════
+     SHARED: card, page header
+  ══════════════════════════════════════════ */
+  .ph h1 {
+    font-size: 20px !important;
+    line-height: 1.3 !important;
+  }
+  .ph p {
+    font-size: 11px !important;
+    line-height: 1.5 !important;
+  }
+  .card {
+    padding: 12px !important;
+    border-radius: 10px !important;
+  }
+  .cc {
+    padding: 10px 12px !important;
+    border-radius: 10px !important;
+  }
+}
+
+/* Extra small: dưới 420px */
+@media (max-width: 420px) {
+  #lc-kpi { grid-template-columns: 1fr 1fr !important; }
+  #pv-kpi-row { grid-template-columns: 1fr 1fr !important; }
+
+  #pg-lifecycle .fbar .prbtn {
+    flex: 1 1 44% !important;
+    font-size: 10px !important;
+    padding: 5px 4px !important;
+  }
+  #pg-analysis .fbar .prbtn {
+    flex: 1 1 29% !important;
+    font-size: 10px !important;
+    padding: 5px 2px !important;
+  }
+  .ph h1 { font-size: 18px !important; }
+  #pvb_formWrap input.inp,
+  #pvb_formWrap select.inp {
+    font-size: 13px !important;
+  }
+}
+</style>
