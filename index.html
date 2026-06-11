@@ -4843,12 +4843,12 @@ function detectOutliers(data) {
 function showOutlierModal(){
   const data=buildLifecycleData();
   const outliers=detectOutliers(data);
-  const modal=document.createElement('div');modal.className='modal-bg';
-  modal.innerHTML=`<div class="modal-box" style="max-width:860px;max-height:80vh;overflow-y:auto">
-    <div class="mh" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+  const modal=document.createElement('div');modal.className='ov show';
+  modal.innerHTML=`<div class="modal wide" style="max-width:860px;max-height:80vh;overflow-y:auto">
+    <div class="mh" style="background:linear-gradient(135deg,var(--s2),var(--s3));display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
       <div><h3 style="margin:0">&#x26A1; Điểm tuổi thọ bất thường</h3>
-        <p style="margin:4px 0 0;font-size:11px;color:var(--mu)">Mẫu có tuổi thọ lệch &gt;2&#x03C3; so với trung bình · Có thể chỉnh sửa & lưu ghi chú vào Sheet 5</p></div>
-      <button class="btn bg-g sm" onclick="lcExportOutliersXLSX()">&#x1F4E5; Xuất Excel</button>
+        <p style="margin:4px 0 0;font-size:11px;opacity:.85">Mẫu có tuổi thọ lệch &gt;2&#x03C3; so với trung bình · Có thể chỉnh sửa & lưu ghi chú vào Sheet 5</p></div>
+      <div style="display:flex;gap:6px;align-items:center"><button class="btn bg-g sm" onclick="lcExportOutliersXLSX()">&#x1F4E5; Xuất Excel</button><button class="mcl" onclick="this.closest('.ov').remove()">✕</button></div>
     </div>
     ${!outliers.length?'<div style="padding:20px;text-align:center;color:var(--mu)">Không phát hiện điểm bất thường (cần ít nhất 3 mẫu/vật tư)</div>':`
     <div style="overflow-x:auto;margin-top:10px">
@@ -4880,7 +4880,7 @@ function showOutlierModal(){
         </tbody>
       </table>
     </div>`}
-    <div style="text-align:right;margin-top:14px"><button class="btn bg-gr sm" onclick="this.closest('.modal-bg').remove()">Đóng</button></div>
+    <div style="text-align:right;margin-top:14px"><button class="btn bg-gr sm" onclick="this.closest('.ov').remove()">Đóng</button></div>
   </div>`;
   document.body.appendChild(modal);
   modal.addEventListener('click',e=>{if(e.target===modal)modal.remove();});
@@ -4949,10 +4949,10 @@ function renderLifecycle() {
     // Build clickable critical/warn list html
     const buildWarnListFn = (list, title, color) => {
       if(!list.length) return;
-      const modal=document.createElement('div'); modal.className='modal-bg';
-      modal.innerHTML=`<div class="modal-box" style="max-width:700px;max-height:75vh;overflow-y:auto">
-        <div class="mh"><h3 style="margin:0;color:${color}">${title}</h3>
-          <p style="margin:4px 0 0;font-size:11px;color:var(--mu)">${list.length} vật tư · Nhấn mã máy để xem chi tiết</p></div>
+      const modal=document.createElement('div'); modal.className='ov show';
+      modal.innerHTML=`<div class="modal wide" style="max-width:700px;max-height:75vh;overflow-y:auto">
+        <div class="mh" style="background:linear-gradient(135deg,var(--s2),var(--s3));display:flex;align-items:center;justify-content:space-between;gap:8px"><div><h3 style="margin:0;color:#fff">${title}</h3>
+          <p style="margin:4px 0 0;font-size:11px;opacity:.85">${list.length} vật tư · Nhấn mã máy để xem chi tiết</p></div><button class="mcl" onclick="this.closest('.ov').remove()">✕</button></div>
         <div style="overflow-x:auto;margin-top:10px">
           <table style="width:100%;border-collapse:collapse;font-size:11px">
             <thead><tr style="background:#fff7ed;border-bottom:2px solid #fde68a">
@@ -4966,7 +4966,7 @@ function renderLifecycle() {
             <tbody>${list.map(d=>`<tr style="border-bottom:1px solid #f1f5f9">
               <td style="padding:7px 10px;font-weight:600">${d.name}</td>
               <td style="padding:7px 10px;text-align:center">
-                ${d.machines.filter(m=>m!=='__unknown__').map(m=>`<span class="b bb" style="font-size:10px;cursor:pointer" onclick="lcSelectFilter('mm','${m}');this.closest('.modal-bg').remove()">${m}</span>`).join(' ')}
+                ${d.machines.filter(m=>m!=='__unknown__').map(m=>`<span class="b bb" style="font-size:10px;cursor:pointer" onclick="lcSelectFilter('mm','${m}');this.closest('.ov').remove()">${m}</span>`).join(' ')}
               </td>
               <td style="padding:7px 10px;text-align:center;font-size:11px">${d.lastDate||'—'}</td>
               <td style="padding:7px 10px;text-align:center;font-family:var(--mono)">${d.avgGio?d.avgGio+'h':'—'}</td>
@@ -4976,7 +4976,7 @@ function renderLifecycle() {
             </tbody>
           </table>
         </div>
-        <div style="text-align:right;margin-top:12px"><button class="btn bg-gr sm" onclick="this.closest('.modal-bg').remove()">Đóng</button></div>
+        <div style="text-align:right;margin-top:12px"><button class="btn bg-gr sm" onclick="this.closest('.ov').remove()">Đóng</button></div>
       </div>`;
       document.body.appendChild(modal);
       modal.addEventListener('click',e=>{if(e.target===modal)modal.remove();});
@@ -5427,7 +5427,7 @@ function renderPartCharts(partName, filteredData) {
 // ══════════════════════════════════════════════════════════════
 function lcShowBarDetail(title, rows, colHeaders, repIds) {
   // repIds: mảng mã BC tương ứng với rows (nếu có)
-  const modal = document.createElement('div'); modal.className = 'modal-bg';
+  const modal = document.createElement('div'); modal.className = 'ov show';
   const dt = new Date();
   const dateStr = `${dt.getFullYear()}.${String(dt.getMonth()+1).padStart(2,'0')}.${String(dt.getDate()).padStart(2,'0')}`;
   const safeTitle = (title||'').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
@@ -5435,16 +5435,16 @@ function lcShowBarDetail(title, rows, colHeaders, repIds) {
   // Build BDSC report rows nếu có repIds
   const bdscReps = (repIds||[]).map(id => REPORTS.find(r=>r.id===id)).filter(Boolean);
 
-  modal.innerHTML = `<div class="modal-box" style="max-width:900px;max-height:85vh;overflow-y:auto">
-    <div class="mh" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;padding-bottom:10px;border-bottom:1px solid var(--bd)">
+  modal.innerHTML = `<div class="modal wide" style="max-width:900px;max-height:85vh;overflow-y:auto">
+    <div class="mh" style="background:linear-gradient(135deg,var(--s2),var(--s3));display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
       <div>
         <h3 style="margin:0;font-size:15px">📊 ${title}</h3>
-        <p style="margin:4px 0 0;font-size:11px;color:var(--mu)">${rows.length} lần thay thế${bdscReps.length?' · '+bdscReps.length+' báo cáo BDSC':''}</p>
+        <p style="margin:4px 0 0;font-size:11px;opacity:.85">${rows.length} lần thay thế${bdscReps.length?' · '+bdscReps.length+' báo cáo BDSC':''}</p>
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         <button class="btn bg-b sm" onclick="lcExportDetailPDF('${safeTitle}')">📄 Xuất PDF</button>
         <button class="btn bg-g sm" onclick="lcExportDetailXLSX('${safeTitle}')">📥 Xuất Excel</button>
-        <button class="btn bg-gr sm" onclick="this.closest('.modal-bg').remove()">✕ Đóng</button>
+        <button class="btn bg-gr sm" onclick="this.closest('.ov').remove()">✕ Đóng</button>
       </div>
     </div>
 
@@ -5463,7 +5463,7 @@ function lcShowBarDetail(title, rows, colHeaders, repIds) {
               return `<tr style="border-bottom:1px solid #f1f5f9;${i%2===1?'background:#fafafa':''}">
                 ${row.map(cell=>`<td style="padding:7px 10px;font-size:11px">${cell??'—'}</td>`).join('')}
                 <td style="padding:7px 10px;text-align:center">
-                  ${rid ? `<button class="btn bg-a sm" style="font-size:10px;padding:2px 8px" onclick="this.closest('.modal-bg').remove();viewRep('${rid}')">👁 Xem</button>` : '—'}
+                  ${rid ? `<button class="btn bg-a sm" style="font-size:10px;padding:2px 8px" onclick="this.closest('.ov').remove();viewRep('${rid}')">👁 Xem</button>` : '—'}
                 </td>
               </tr>`;
             }).join('')}
@@ -5486,7 +5486,7 @@ function lcShowBarDetail(title, rows, colHeaders, repIds) {
               ${r.soGioVanHanh>0?`<span style="margin-left:8px;font-size:10px;color:#d97706">⏱ ${formatHoursToDuration(r.soGioVanHanh)}</span>`:''}
             </div>
             <div style="display:flex;gap:5px">
-              <button class="btn bg-a sm" style="font-size:10px;padding:2px 8px" onclick="this.closest('.modal-bg').remove();viewRep('${r.id}')">👁 Xem</button>
+              <button class="btn bg-a sm" style="font-size:10px;padding:2px 8px" onclick="this.closest('.ov').remove();viewRep('${r.id}')">👁 Xem</button>
             </div>
           </div>`).join('')}
       </div>
