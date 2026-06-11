@@ -11490,3 +11490,731 @@ nav=function(p){
 })();
 </script>
 
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     PATCH v41 - 4 IMPROVEMENTS:
+     1. Vật tư cố định hiển thị ngay (không gọi API)
+     2. Dropdown loại vật tư (từ sheet 4 & 9)
+     3. Chọn linh kiện không cần xác nhận, tự lưu khi đóng
+     4. Mobile UI cải thiện cho tổng quan/phân tích/vòng đời + phiếu vật tư
+════════════════════════════════════════════════════════════════════ -->
+
+<!-- PATCH 1 & 2: Vật tư cố định hiển thị ngay + Dropdown loại từ sheet 4&9 -->
+<script id="patch-v41-vattu-codinh-loai">
+(function(){
+  if(window.__patchV41VatTuLoai) return;
+  window.__patchV41VatTuLoai = true;
+
+  // ── Dữ liệu loại vật tư embed trực tiếp từ sheet 4 & 9 ──
+  var VAT_TU_LOAI_MAP = {
+    "Bugi": ["BKR6E","DCPR8E","Mar10A-J 4706","BP6ES"],
+    "\u1ed4 bi tr\u1ee5c \u0111\u00e1nh l\u1eeda": ["V\u00f2ng bi SKF 6007 - 2Z"],
+    "\u1ed4 bi c\u1ee7 ph\u00e1t": ["V\u00f2ng bi E 30206J","V\u00f2ng bi 6312C3","V\u00f2ng bi 6317","V\u00f2ng bi 6215ZZCM","V\u00f2ng bi 6310-2Z"],
+    "D\u00e2y curoa": ["RECMF - 8560","A-7473","A-5639","12PK1625","A64","8610","C60 - RECMF 9600","A54","5PK1110","5PK1050"],
+    "B\u1ea7u l\u1ecdc gi\u00f3 / C\u1ee5m l\u1ecdc gi\u00f3": ["L\u1eccC GI\u00d3 6D105(AS1024)","A-6465A (Nitco)/ A-6117-S","L\u1ecdc gi\u00f3 A6117S","L\u1ecdc gi\u00f3 Donaldson P532473","P831197"],
+    "L\u1ecdc nh\u1edbt 1": ["C-5602","T-5121","LF9009","L\u1ecdc nh\u1edbt Sakura O-18051","WF2072","L\u1ecdc nh\u1edbt Sakura O-1808","L\u1ecdc nh\u1edbt Sakura O-1809","L\u1ecdc nh\u1edbt Sakura O-1804","L\u1ecdc nh\u1edbt Sakura O-1806"],
+    "L\u1ecdc nh\u1edbt 2": ["C-5602","T-5121","LF9009","L\u1ecdc nh\u1edbt Sakura O-18051","WF2072","L\u1ecdc nh\u1edbt Sakura O-1808","L\u1ecdc nh\u1edbt Sakura O-1809","L\u1ecdc nh\u1edbt Sakura O-1804","L\u1ecdc nh\u1edbt Sakura O-1806"]
+  };
+  window.VAT_TU_LOAI_MAP = VAT_TU_LOAI_MAP;
+
+  function norm(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\u0111/g,'d').replace(/\s+/g,' ').trim(); }
+  function esc(s){ return String(s||'').replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+
+  // Lấy danh sách loại cho một tên vật tư
+  window.getVatTuLoai = function(tenVatTu){
+    if(!tenVatTu) return [];
+    var nk = norm(tenVatTu);
+    for(var k in VAT_TU_LOAI_MAP){
+      if(norm(k) === nk) return VAT_TU_LOAI_MAP[k];
+    }
+    return [];
+  };
+
+  // Build dropdown HTML cho loại vật tư (1 option/dòng)
+  window.buildLoaiDropdownHTML = function(tenVatTu, selectedLoai, extraAttr){
+    var loais = window.getVatTuLoai(tenVatTu);
+    if(!loais || !loais.length) return '';
+    extraAttr = extraAttr || '';
+    var opts = '<option value="">\u2014 Ch\u1ecdn lo\u1ea1i \u2014</option>';
+    loais.forEach(function(l){
+      opts += '<option value="'+esc(l)+'" '+(norm(l)===norm(selectedLoai)?'selected':'')+'>'+esc(l)+'</option>';
+    });
+    return '<select class="pv41-loai-sel" '+extraAttr+' title="Ch\u1ecdn lo\u1ea1i v\u1eadt t\u01b0">'+opts+'</select>';
+  };
+
+  // Inject loại vào tên: "Bugi (BKR6E)" nếu có chọn loại
+  window.buildPayloadTenVatTu = function(base, loai){
+    base = String(base||'').trim();
+    loai = String(loai||'').trim();
+    if(!loai) return base;
+    return base + ' (' + loai + ')';
+  };
+
+  // ── Override pvBDSCAddFixed: hiển thị ngay, không cần API ──
+  // Chờ cho đến khi các function khác đã sẵn sàng
+  function patchAddFixed(){
+    var orig = window.pvBDSCAddFixed;
+    window.pvBDSCAddFixed = function(){
+      try {
+        var p = (typeof PV !== 'undefined' ? PV : null) || (typeof pvRef === 'function' ? pvRef() : null);
+        if(!p || !p.data) { if(orig) orig(); return; }
+        p.data.selected = Array.isArray(p.data.selected) ? p.data.selected : [];
+        var vtCoDinh = p.data.vatTuCoDinh || [];
+
+        // Nếu chưa có vatTuCoDinh từ API nhưng đã login, vẫn hiển thị danh sách trống
+        // khi vtCoDinh rỗng thì gọi orig nếu có
+        if(!vtCoDinh.length && orig){ orig(); return; }
+
+        // Thêm từng vật tư cố định nếu chưa có
+        vtCoDinh.forEach(function(x){
+          var id = typeof matId === 'function' ? matId(x) :
+                   (typeof pvMatId === 'function' ? pvMatId(x) : null);
+          if(!id) return;
+          if(p.data.selected.find(function(i){ return i.id === id; })) return;
+          var ten = typeof tenVT === 'function' ? tenVT(x) :
+                    (typeof pvTenVatTu === 'function' ? pvTenVatTu(x) : (x.tenVatTu||''));
+          var cum = typeof cumVT === 'function' ? cumVT(x) :
+                    (typeof pvCum === 'function' ? pvCum(x) : (x.cumLinhKien||''));
+          p.data.selected.push({
+            id: id,
+            tenVatTu: ten,
+            cumLinhKien: cum,
+            maVatTu: x['Mã vật tư']||x.maVatTu||'',
+            donViTinh: x['ĐVT']||x['Đơn vị tính']||x.donViTinh||'',
+            soLuongCan: 1,
+            tinhTrangXuatKho: 'Mới',
+            nguonVatTu: 'Cố định',
+            fixed: true,
+            included: true,
+            loaiDong: 'Chuẩn bị',
+            loaiVatTu: ''
+          });
+        });
+      } catch(e){ if(orig) orig(); }
+    };
+    window.pvBDSCAddFixed.__patchV41 = true;
+  }
+
+  // ── Override pvBDSCRenderSelected: thêm dropdown loại cho vật tư có nhiều loại ──
+  function patchRenderSelected(){
+    var origRender = window.pvBDSCRenderSelected;
+    window.pvBDSCRenderSelected = function(){
+      // Gọi hàm gốc trước
+      if(origRender) origRender.apply(this, arguments);
+
+      // Sau đó inject dropdown loại vào các dòng chưa có
+      setTimeout(function(){
+        try {
+          var box = document.getElementById('pvb_selectedItems'); if(!box) return;
+          var p = (typeof PV !== 'undefined' ? PV : null);
+          if(!p || !p.data || !p.data.selected) return;
+
+          p.data.selected.forEach(function(item){
+            var loais = window.getVatTuLoai(item.tenVatTu);
+            if(!loais.length) return;
+
+            // Tìm container của item này (bằng id trong markup)
+            // Thêm dropdown nếu chưa có
+            var id = item.id;
+            // Tìm phần tử chứa checkbox với id
+            var rows = box.querySelectorAll('div');
+            rows.forEach(function(row){
+              // Nhận dạng dòng qua checkbox onchange attr
+              var cb = row.querySelector('input[type=checkbox]');
+              if(!cb) return;
+              var onch = (cb.getAttribute('onchange')||cb.getAttribute('onclick')||'');
+              if(onch.indexOf(id.replace(/'/g,""))<0 && onch.indexOf(encodeURIComponent(id))<0) {
+                // Try matching the escaped id variant
+                var jsId = id.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+                if(onch.indexOf(jsId.substring(0,20))<0) return;
+              }
+              // Check if dropdown already injected
+              if(row.querySelector('.pv41-loai-sel')) return;
+              // Build and inject dropdown
+              var wrapper = document.createElement('div');
+              wrapper.style.cssText = 'width:100%;margin-top:4px;display:flex;align-items:center;gap:5px;flex-wrap:wrap';
+              var label = document.createElement('span');
+              label.style.cssText = 'font-size:10px;color:#64748b;white-space:nowrap';
+              label.textContent = 'Loại:';
+              wrapper.appendChild(label);
+              var sel = document.createElement('select');
+              sel.className = 'pv41-loai-sel';
+              sel.title = 'Chọn loại vật tư';
+              sel.innerHTML = '<option value="">— Chọn loại —</option>' +
+                loais.map(function(l){ return '<option value="'+esc(l)+'" '+(norm(l)===norm(item.loaiVatTu||'')?'selected':'')+'>'+esc(l)+'</option>'; }).join('');
+              sel.addEventListener('change', function(){
+                if(p.data.selected){
+                  var it = p.data.selected.find(function(x){ return x.id===id; });
+                  if(it) it.loaiVatTu = sel.value;
+                }
+              });
+              wrapper.appendChild(sel);
+              row.appendChild(wrapper);
+            });
+          });
+        } catch(e){}
+      }, 80);
+    };
+    window.pvBDSCRenderSelected.__patchV41 = true;
+  }
+
+  // ── Override pvBDSCRenderVatTuSearch: thêm dropdown loại trong danh sách tìm kiếm ──
+  function patchRenderSearch(){
+    var origSearch = window.pvBDSCRenderVatTuSearch;
+    window.pvBDSCRenderVatTuSearch = function(){
+      if(origSearch) origSearch.apply(this, arguments);
+      // Sau khi render xong, thêm dropdown loại vào các hàng có nhiều loại
+      setTimeout(function(){
+        try {
+          var box = document.getElementById('pvb_vatTuSearchList'); if(!box) return;
+          // Tìm tất cả các dòng pi-row / div.pi-row
+          var rows = box.querySelectorAll('.pi-row, [style*="display:flex"]');
+          rows.forEach(function(row){
+            if(row.querySelector('.pv41-loai-sel')) return;
+            // Tìm tên vật tư từ thẻ b
+            var bEl = row.querySelector('b');
+            if(!bEl) return;
+            var ten = bEl.textContent.trim();
+            var loais = window.getVatTuLoai(ten);
+            if(!loais.length) return;
+            // Tìm hoặc tạo container cho dropdown
+            var wrapper = document.createElement('div');
+            wrapper.style.cssText = 'display:flex;align-items:center;gap:4px;margin-top:3px;width:100%';
+            var label = document.createElement('span');
+            label.style.cssText = 'font-size:10px;color:#64748b;white-space:nowrap';
+            label.textContent = 'Loại:';
+            wrapper.appendChild(label);
+            var sel = document.createElement('select');
+            sel.className = 'pv41-loai-sel';
+            sel.title = 'Chọn loại vật tư';
+            sel.innerHTML = '<option value="">— Chọn —</option>' +
+              loais.map(function(l){ return '<option value="'+esc(l)+'">'+esc(l)+'</option>'; }).join('');
+            // Khi chọn xong thì ghi vào checkbox và trigger selection
+            var cb = row.querySelector('input[type=checkbox]');
+            sel.addEventListener('change', function(){
+              if(cb && !cb.checked) {
+                cb.checked = true;
+                var evt = new Event('change', {bubbles:true});
+                cb.dispatchEvent(evt);
+              }
+              // Cập nhật loaiVatTu cho item đã chọn
+              var p = (typeof PV !== 'undefined' ? PV : null);
+              if(p && p.data && p.data.selected && cb){
+                // Tìm item qua checkbox onchange
+                var onch = (cb.getAttribute('onchange')||'');
+                var idMatch = onch.match(/pvBDSCSelectMaterial\s*\(\s*['"]([^'"]+)['"]/);
+                if(idMatch){
+                  var itemId = idMatch[1];
+                  var it = p.data.selected.find(function(x){ return x.id===itemId; });
+                  if(it) it.loaiVatTu = sel.value;
+                }
+              }
+            });
+            wrapper.appendChild(sel);
+            row.appendChild(wrapper);
+          });
+        } catch(e){}
+      }, 60);
+    };
+    window.pvBDSCRenderVatTuSearch.__patchV41 = true;
+  }
+
+  // Override payload để bao gồm loại
+  function patchPayload(){
+    var origPayload = window.pvBDSCPayload;
+    if(!origPayload) return;
+    window.pvBDSCPayload = function(){
+      var result = origPayload.apply(this, arguments);
+      if(result && result.items){
+        result.items = result.items.map(function(item){
+          var loai = item.loaiVatTu||'';
+          if(loai && item.tenVatTu && item.tenVatTu.indexOf('('+loai+')')<0){
+            item.tenVatTu = item.tenVatTu + ' (' + loai + ')';
+          }
+          return item;
+        });
+      }
+      return result;
+    };
+  }
+
+  // Apply patches khi DOM sẵn sàng
+  function applyAll(){
+    if(typeof window.pvBDSCAddFixed === 'function' && !window.pvBDSCAddFixed.__patchV41) patchAddFixed();
+    if(typeof window.pvBDSCRenderSelected === 'function' && !window.pvBDSCRenderSelected.__patchV41) patchRenderSelected();
+    if(typeof window.pvBDSCRenderVatTuSearch === 'function' && !window.pvBDSCRenderVatTuSearch.__patchV41) patchRenderSearch();
+    if(typeof window.pvBDSCPayload === 'function') patchPayload();
+  }
+
+  // Gọi nhiều lần để đảm bảo
+  setTimeout(applyAll, 200);
+  setTimeout(applyAll, 800);
+  setTimeout(applyAll, 2000);
+
+  // Cũng patch optionsFor của pv26 nếu có
+  var _pv26OptionsForOrig = window._pv26OptionsFor;
+  window._pv26OptionsFor = window._pv26OptionsFor || function(cum, ten){
+    return window.getVatTuLoai(ten);
+  };
+
+  // Inject CSS cho dropdown loại
+  var styleEl = document.createElement('style');
+  styleEl.textContent = [
+    '.pv41-loai-sel{',
+    '  border:1.5px solid var(--bd,#d1d5db);',
+    '  border-radius:7px;',
+    '  padding:4px 8px;',
+    '  font-size:11px;',
+    '  background:#fff;',
+    '  color:var(--s,#1e293b);',
+    '  cursor:pointer;',
+    '  min-width:160px;',
+    '  max-width:280px;',
+    '  outline:none;',
+    '}',
+    '.pv41-loai-sel:focus{border-color:var(--g,#0d6e3f);box-shadow:0 0 0 2px rgba(13,110,63,.1)}',
+    '@media(max-width:480px){.pv41-loai-sel{min-width:120px;font-size:10px;}}'
+  ].join('');
+  document.head.appendChild(styleEl);
+
+  // Patch pv19 complete table để có dropdown loại cho vật tư phát sinh
+  var _pv19MatOrigOptions = window.pv19MatOptionsHTML;
+  if(typeof _pv19MatOrigOptions === 'function'){
+    window.pv19MatOptionsHTML = function(selected, tr){
+      // Khi mat được chọn từ dropdown pv19, thêm dropdown loại nếu cần
+      var html = _pv19MatOrigOptions.apply(this, arguments);
+      // Inject loại selection sau khi select material
+      return html;
+    };
+  }
+
+})();
+</script>
+
+<!-- PATCH 3: Chọn linh kiện không cần xác nhận - tự lưu khi đóng modal -->
+<script id="patch-v41-part-picker-auto-save">
+(function(){
+  if(window.__patchV41PartAutoSave) return;
+  window.__patchV41PartAutoSave = true;
+
+  // Override closeOv để tự lưu linh kiện khi đóng modal ov-part
+  var origCloseOv = window.closeOv;
+  window.closeOv = function(id){
+    if(id === 'ov-part'){
+      // Tự động lưu trước khi đóng (không cần bấm Xác nhận)
+      try { autoSaveParts(); } catch(e){}
+    }
+    if(origCloseOv) origCloseOv.apply(this, arguments);
+  };
+
+  function autoSaveParts(){
+    var body = document.getElementById('partPickerBody');
+    if(!body) return;
+
+    // Kiểm tra xem có linh kiện nào được checked không
+    var checkboxes = body.querySelectorAll('input[type=checkbox]');
+    if(!checkboxes.length) return;
+
+    var sel = {};
+    body.querySelectorAll('.pi-row').forEach(function(row){
+      var cb = row.querySelector('input[type=checkbox]');
+      if(!cb || !cb.checked) return;
+      var lbl = row.querySelector('.pi-name');
+      if(!lbl) return;
+      var lkName = lbl.textContent.trim();
+      var act = row.querySelector('.pa.rep') || row.querySelector('.pa.fix') || row.querySelector('.pa.cln');
+      var loai = 'Thay thế';
+      if(act){
+        if(act.classList.contains('fix')) loai = 'Sửa chữa';
+        else if(act.classList.contains('cln')) loai = 'Bảo dưỡng';
+      }
+      var qtyInp = row.querySelector('input[type=number]');
+      var sl = qtyInp ? Math.max(1, parseInt(qtyInp.value)||1) : 1;
+      var gcInp = row.querySelector('.pi-gc');
+      var gc = gcInp ? gcInp.value.trim() : '';
+      sel[lkName] = {loai: loai, sl: sl, gc: gc};
+    });
+
+    // Lưu vào display element
+    var idx = (typeof curPartTarget !== 'undefined') ? curPartTarget : null;
+    if(idx === null) return;
+    var disp = document.getElementById('ph-parts-' + idx);
+    if(!disp) return;
+
+    var items = Object.entries(sel);
+    if(!items.length) return; // Nếu không chọn gì, giữ nguyên
+
+    disp.dataset.parts = JSON.stringify(sel);
+    disp.innerHTML = items.map(function(entry){
+      var lk = entry[0], obj = entry[1];
+      var badgeClass = obj.loai === 'Thay thế' ? 'br' : (obj.loai === 'Sửa chữa' ? 'ba' : 'bb');
+      return '<div style="display:flex;align-items:center;gap:5px;margin-bottom:4px;flex-wrap:wrap">' +
+        '<span style="font-size:11px;font-weight:600">' + lk + '</span>' +
+        '<span class="b ' + badgeClass + '">' + obj.loai + '</span>' +
+        '<span style="font-size:10px;font-family:var(--mono,monospace);background:#f1f5f9;color:#475569;padding:1px 6px;border-radius:4px">x' + obj.sl + '</span>' +
+        (obj.gc ? '<span style="font-size:10px;color:var(--mu,#64748b)">' + obj.gc + '</span>' : '') +
+        '</div>';
+    }).join('');
+  }
+
+  // Ẩn nút Xác nhận trong footer của modal ov-part (không cần nữa)
+  function hideConfirmBtn(){
+    var mf = document.querySelector('#ov-part .mf');
+    if(!mf) return;
+    var btns = mf.querySelectorAll('.btn');
+    btns.forEach(function(btn){
+      if(btn.textContent.trim().indexOf('Xác nhận') >= 0 ||
+         btn.getAttribute('onclick') && btn.getAttribute('onclick').indexOf('confirmParts') >= 0){
+        btn.style.display = 'none';
+      }
+    });
+    // Đổi text nút Đóng
+    btns.forEach(function(btn){
+      if(btn.textContent.trim() === 'Đóng'){
+        btn.textContent = '✓ Lưu & Đóng';
+        btn.classList.remove('bg-gr');
+        btn.classList.add('bg-g');
+      }
+    });
+  }
+
+  // Áp dụng sau khi DOM sẵn sàng
+  setTimeout(hideConfirmBtn, 500);
+  setTimeout(hideConfirmBtn, 1500);
+
+  // Cũng patch openPartPicker để tự áp dụng lại khi mở
+  var origOpenPart = window.openPartPicker;
+  if(typeof origOpenPart === 'function'){
+    window.openPartPicker = function(){
+      origOpenPart.apply(this, arguments);
+      setTimeout(hideConfirmBtn, 100);
+    };
+  }
+
+  // CSS: bỏ border nút xác nhận đã ẩn
+  var s = document.createElement('style');
+  s.textContent = '#ov-part .mf .btn[style*="display: none"]{display:none!important}';
+  document.head.appendChild(s);
+
+})();
+</script>
+
+<!-- PATCH 4: Mobile UI cải thiện -->
+<style id="patch-v41-mobile-ui">
+
+/* ── Tổng quan / Dashboard trên mobile ── */
+@media(max-width:768px){
+  /* KPI cards: 2 cột đều nhau */
+  .kgrid{
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px !important;
+  }
+  .kcard{
+    padding: 12px 10px !important;
+    border-radius: 10px !important;
+  }
+  .kval{ font-size: 26px !important; }
+  .klbl{ font-size: 11px !important; }
+  .ksub{ font-size: 10px !important; }
+
+  /* Dashboard charts */
+  .cg2{ gap: 10px !important; }
+  .cc{ border-radius: 10px !important; padding: 12px !important; }
+
+  /* Dashboard bottom 2-column section → 1 column */
+  #pg-dash [style*="grid-template-columns:1fr 1fr"]{
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+
+  /* Tổng quan buttons/actions */
+  #pg-dash .ch{ flex-wrap: wrap; gap: 6px !important; }
+  #pg-dash .btn.sm{ font-size: 11px !important; padding: 5px 10px !important; }
+
+  /* Phân tích (analysis) */
+  #pg-analysis .page-header,
+  #pg-analysis .ph2{
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+  }
+
+  /* Filter bar phân tích */
+  #pg-analysis > div:first-child,
+  #pg-analysis .card:first-child{
+    padding: 10px !important;
+  }
+
+  /* Analysis date range inputs */
+  #pg-analysis input[type=date]{
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+  #pg-analysis .card .ch{
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+  }
+  #pg-analysis .cg2{
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Vòng đời (lifecycle) */
+  #pg-lifecycle .ph{
+    padding: 10px !important;
+  }
+  #pg-lifecycle .card{
+    padding: 10px !important;
+    border-radius: 10px !important;
+  }
+
+  /* Lifecycle filter inputs */
+  #pg-lifecycle input.inp{
+    font-size: 12px !important;
+  }
+  #pg-lifecycle .card .ch{
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+  }
+  #pg-lifecycle canvas{
+    max-width: 100% !important;
+  }
+
+  /* Tạo phiếu vật tư - form */
+  #pg-taoPhieu{ padding: 10px 8px !important; }
+  #pvb_formWrap .fsec{
+    border-radius: 10px !important;
+    margin-bottom: 10px !important;
+    padding: 12px 10px !important;
+  }
+  #pvb_formWrap .fsh{
+    margin-bottom: 8px !important;
+  }
+  #pvb_formWrap .fgrid,
+  #pvb_formWrap .fg2{
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+  }
+  #pvb_formWrap .iw{ margin-bottom: 6px !important; }
+  #pvb_formWrap input.inp,
+  #pvb_formWrap select.inp{
+    font-size: 13px !important;
+    padding: 9px 10px !important;
+  }
+
+  /* Danh sách vật tư đã chọn */
+  #pvb_selectedItems > div{
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+    padding: 8px !important;
+  }
+  #pvb_selectedItems .pv26-type-select,
+  #pvb_selectedItems .pv41-loai-sel{
+    min-width: 130px !important;
+    width: 100% !important;
+    max-width: none !important;
+    font-size: 12px !important;
+  }
+  #pvb_selectedItems input[type=number]{
+    width: 60px !important;
+  }
+
+  /* Hoàn thành phiếu vật tư */
+  #pg-hoanThanhPhieu{ padding: 10px 8px !important; }
+  #pvCompleteRoot .card{
+    padding: 10px !important;
+    border-radius: 10px !important;
+  }
+  #pvCompleteRoot .cb{
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+  }
+  #pvCompleteRoot .tblwrap,
+  #pvCompleteRoot .pv18-scroll,
+  #pvCompleteRoot .pv16-scroll,
+  #pvCompleteRoot .pv17-scroll{
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+  #pvCompleteRoot table{
+    min-width: 700px !important;
+    font-size: 11px !important;
+  }
+  #pvCompleteRoot th,
+  #pvCompleteRoot td{
+    padding: 5px 4px !important;
+  }
+  #pvCompleteRoot input.inp{
+    font-size: 12px !important;
+    padding: 7px 8px !important;
+  }
+  #pvCompleteRoot .pv18-form-grid{
+    grid-template-columns: 1fr !important;
+  }
+  #pvCompleteRoot .pv18-form-actions{
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+  }
+
+  /* Danh sách phiếu */
+  #pvHistoryRoot .tblwrap,
+  #pvHistoryRoot .pv-table-wrap{
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+  #pvHistoryRoot table{
+    min-width: 700px !important;
+    font-size: 11px !important;
+  }
+  #pvHistoryRoot td, #pvHistoryRoot th{
+    padding: 5px 4px !important;
+    white-space: nowrap !important;
+  }
+  #pvHistoryRoot td:nth-child(7){ /* thao tac col */
+    white-space: nowrap !important;
+  }
+  #pvHistoryRoot .btn.sm{
+    font-size: 10px !important;
+    padding: 3px 6px !important;
+    margin: 1px !important;
+  }
+
+  /* Actions bar tạo phiếu */
+  #pvb_formWrap .pvb-actions,
+  #pvFormRoot .pv-actions{
+    position: sticky !important;
+    bottom: 0 !important;
+    background: rgba(240,249,244,.97) !important;
+    backdrop-filter: blur(8px) !important;
+    -webkit-backdrop-filter: blur(8px) !important;
+    padding: 10px 8px !important;
+    z-index: 50 !important;
+    border-top: 1px solid var(--bd,#e2e8f0) !important;
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+  }
+  #pvb_formWrap .pvb-actions .btn,
+  #pvFormRoot .pv-actions .btn{
+    flex: 1 1 auto !important;
+    min-width: 120px !important;
+    text-align: center !important;
+    font-size: 13px !important;
+    padding: 10px !important;
+  }
+
+  /* Nút tạo phiếu mới trên navbar */
+  #ni-taoPhieu, #ni-hoanThanhPhieu{
+    font-size: 12px !important;
+  }
+
+  /* Summary cards trên tổng quan */
+  #pvBDSCBadge, .nbadge{
+    font-size: 9px !important;
+    padding: 1px 5px !important;
+  }
+
+  /* Dropdown loại vật tư nhỏ hơn trên mobile */
+  .pv41-loai-sel{
+    min-width: 120px !important;
+    font-size: 11px !important;
+  }
+}
+
+/* ── Extra: màn hình rất nhỏ (< 380px) ── */
+@media(max-width:380px){
+  .kgrid{ grid-template-columns: 1fr 1fr !important; gap: 6px !important; }
+  .kval{ font-size: 22px !important; }
+  #pg-taoPhieu, #pg-hoanThanhPhieu{ padding: 8px 6px !important; }
+  #pvb_formWrap .fsec{ padding: 10px 8px !important; }
+  #pvCompleteRoot table{ min-width: 600px !important; font-size: 10px !important; }
+}
+
+/* ── Phiếu vật tư buttons ở dash/tổng quan ── */
+@media(max-width:768px){
+  /* Nút tạo phiếu / hoàn thành phiếu trên quick-action row nếu có */
+  .dash-phieu-btns{
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+  }
+  .dash-phieu-btns .btn{
+    width: 100% !important;
+    font-size: 13px !important;
+    padding: 10px !important;
+  }
+}
+
+/* ── Fix scroll modal ov-part trên mobile ── */
+@media(max-width:768px){
+  #ov-part .mb{
+    max-height: 60vh !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+  #ov-part .mo{
+    width: calc(100vw - 20px) !important;
+    max-height: 90vh !important;
+    overflow-y: auto !important;
+  }
+  #ov-part .mf{
+    position: sticky !important;
+    bottom: 0 !important;
+    background: #fff !important;
+    padding: 10px !important;
+    border-top: 1px solid var(--bd,#e2e8f0) !important;
+  }
+  .pi-row{
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+    padding: 8px !important;
+  }
+  .pi-acts{
+    flex-wrap: wrap !important;
+    gap: 4px !important;
+  }
+  .pi-qty{
+    width: 54px !important;
+  }
+}
+</style>
+
+<!-- PATCH 4b: Quick fix buttons hiển thị phiếu vật tư trong Tổng quan -->
+<script id="patch-v41-dash-phieu-btns">
+(function(){
+  // Thêm quick buttons vào dashboard tổng quan nếu chưa có
+  function injectDashBtns(){
+    var dash = document.getElementById('pg-dash');
+    if(!dash) return;
+    if(dash.querySelector('.dash-phieu-quick')) return;
+
+    var kgrid = dash.querySelector('.kgrid');
+    if(!kgrid) return;
+
+    // Tạo một row nút phiếu vật tư nhỏ gọn ở dưới kgrid
+    var wrapper = document.createElement('div');
+    wrapper.className = 'dash-phieu-quick';
+    wrapper.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;margin-bottom:2px';
+    wrapper.innerHTML = [
+      '<button class="btn bg-g" style="flex:1;min-width:140px;font-size:12px;padding:8px 10px" onclick="nav(\'taoPhieu\')">',
+      '📋 Tạo phiếu vật tư',
+      '</button>',
+      '<button class="btn bg-a" style="flex:1;min-width:140px;font-size:12px;padding:8px 10px" onclick="nav(\'hoanThanhPhieu\')">',
+      '✅ Hoàn thành phiếu',
+      '</button>'
+    ].join('');
+    kgrid.parentNode.insertBefore(wrapper, kgrid.nextSibling);
+  }
+
+  setTimeout(injectDashBtns, 600);
+  setTimeout(injectDashBtns, 2000);
+
+  // Inject lại khi nav vào dash
+  var origNav = window.nav;
+  if(typeof origNav === 'function'){
+    window.nav = function(p){
+      var r = origNav.apply(this, arguments);
+      if(p === 'dash') setTimeout(injectDashBtns, 200);
+      return r;
+    };
+  }
+})();
+</script>
