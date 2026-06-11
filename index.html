@@ -14181,3 +14181,179 @@ nav=function(p){
 
 })();
 </script>
+
+<!-- ═══════════════════════════════════════════════════════
+  PATCH v46:
+  1. Re-inject 'Các loại' into vatTu after pvBDSCSyncInBackground_ wipes it
+     (this fixes "Bugi dropdown missing on 2nd add")
+  2. Neutralize v41/v42 search extra dropdowns 
+     (by removing .pv41-loai-sel/.pv42-loai-sel after they're injected)
+═══════════════════════════════════════════════════════ -->
+<script id="pv46-patch">
+(function(){
+  if(window.__pv46Done) return;
+  window.__pv46Done = true;
+
+  /* ── Static types (same as pv45) ── */
+  var T = window.PV45_TYPES || {
+    'bugi':['BKR6E','DCPR8E','Mar10A-J 4706','BP6ES'],
+    'o bi cu phat':['Vòng bi E 30206J','Vòng bi 6312C3','Vòng bi 6317','Vòng bi 6215ZZCM','Vòng bi 6310-2Z'],
+    'day curoa':['RECMF - 8560','A-7473','A-5639','12PK1625','A64','8610','C60 - RECMF 9600','A54','5PK1110','5PK1050'],
+    'bau loc gio / cum loc gio':['LỌC GIÓ 6D105(AS1024)','A-6465A (Nitco)/ A-6117-S','Lọc gió A6117S','Lọc gió Donaldson P532473','P831197'],
+    'bau loc gio':['LỌC GIÓ 6D105(AS1024)','A-6465A (Nitco)/ A-6117-S','Lọc gió A6117S','Lọc gió Donaldson P532473','P831197'],
+    'loc nhot 1':['C-5602','T-5121','LF9009','Lọc nhớt Sakura O-18051','WF2072','Lọc nhớt Sakura O-1808','Lọc nhớt Sakura O-1809','Lọc nhớt Sakura O-1804','Lọc nhớt Sakura O-1806'],
+    'loc nhot 2':['C-5602','T-5121','LF9009','Lọc nhớt Sakura O-18051','WF2072','Lọc nhớt Sakura O-1808','Lọc nhớt Sakura O-1809','Lọc nhớt Sakura O-1804','Lọc nhớt Sakura O-1806']
+  };
+
+  function norm(s){
+    return String(s||'').toLowerCase().normalize('NFD')
+      .replace(/[\u0300-\u036f]/g,'').replace(/\u0111/g,'d').replace(/\s+/g,' ').trim();
+  }
+  function getTypes(name){
+    var n=norm(name);
+    if(T[n]) return T[n];
+    var out=[];
+    Object.keys(T).forEach(function(k){if(n===k||n.indexOf(k)>=0||k.indexOf(n)>=0) out=out.concat(T[k]);});
+    var seen={},res=[];
+    out.forEach(function(v){v=String(v||'').trim();if(!v)return;var k=norm(v);if(!seen[k]){seen[k]=1;res.push(v);}});
+    return res;
+  }
+
+  /* ── FIX 1: Re-inject 'Các loại' into vatTu after any sync ── */
+  function reInjectTypes(){
+    try {
+      var p = window.PV;
+      if(!p||!p.data||!Array.isArray(p.data.vatTu)) return;
+      p.data.vatTu.forEach(function(r){
+        var name = r['Tên Chi Tiết / Linh Kiện Thay Thế']||r['Tên vật tư']||r.tenVatTu||'';
+        if(!name) return;
+        var types = getTypes(name);
+        if(types.length && !String(r['Các loại']||'').trim()){
+          r['Các loại'] = types.join('\n');
+        }
+      });
+      // Also fix vatTuCoDinh
+      if(Array.isArray(p.data.vatTuCoDinh)){
+        p.data.vatTuCoDinh.forEach(function(r){
+          var name = r['Tên Chi Tiết / Linh Kiện Thay Thế']||r.tenVatTu||'';
+          if(!name) return;
+          var types = getTypes(name);
+          if(types.length && !String(r['Các loại']||'').trim()){
+            r['Các loại'] = types.join('\n');
+          }
+        });
+      }
+    } catch(e){}
+  }
+
+  // Patch pvBDSCSyncInBackground_ to call reInjectTypes after completion
+  (function(){
+    var orig = window.pvBDSCSyncInBackground_;
+    if(!orig || orig.__pv46) return;
+    window.pvBDSCSyncInBackground_ = async function(){
+      var r = orig.apply ? await orig.apply(this, arguments) : await orig();
+      reInjectTypes();
+      return r;
+    };
+    window.pvBDSCSyncInBackground_.__pv46 = true;
+  })();
+
+  // Patch pvBDSCRefreshFastData_ to call reInjectTypes after completion
+  (function(){
+    var orig = window.pvBDSCRefreshFastData_;
+    if(!orig || orig.__pv46) return;
+    window.pvBDSCRefreshFastData_ = function(){
+      var r = orig.apply(this, arguments);
+      reInjectTypes();
+      return r;
+    };
+    window.pvBDSCRefreshFastData_.__pv46 = true;
+  })();
+
+  /* ── FIX 2: Remove duplicate dropdowns in search list ──
+     pv26 already renders .pv26-type-select (correct).
+     v41/v42 add .pv41-loai-sel and .pv42-loai-sel on top = duplicates.
+     Solution: after their setTimeout fires, remove the extras.
+  ── */
+  function removeExtraSearchDropdowns(){
+    var box = document.getElementById('pvb_vatTuSearchList');
+    if(!box) return;
+    // Keep only the first select per pi-row (pv26's .pv26-type-select)
+    box.querySelectorAll('.pi-row, [style*="display:flex"]').forEach(function(row){
+      // Remove .pv41-loai-sel and .pv42-loai-sel and .pv44-type-sel if present
+      var extras = row.querySelectorAll('.pv41-loai-sel, .pv42-loai-sel, .pv44-type-sel, .pv42-search-loai, .pv43-search-loai');
+      extras.forEach(function(el){
+        // Also remove parent wrapper if it's a .pv42-search-loai div
+        var parent = el.parentElement;
+        if(parent && (parent.classList.contains('pv42-search-loai')||parent.classList.contains('pv43-search-loai')||parent.classList.contains('pv41-search-loai'))){
+          parent.remove();
+        } else {
+          el.remove();
+        }
+      });
+    });
+  }
+
+  // Run cleanup after v41/v42 timeouts (they use ~80ms, we run at 200ms)
+  function scheduleSearchCleanup(){
+    setTimeout(removeExtraSearchDropdowns, 200);
+    setTimeout(removeExtraSearchDropdowns, 500);
+  }
+
+  // Patch pvBDSCRenderVatTuSearch to trigger cleanup after each render
+  (function(){
+    var orig = window.pvBDSCRenderVatTuSearch;
+    if(!orig || orig.__pv46) return;
+    window.pvBDSCRenderVatTuSearch = function(){
+      var r = orig.apply ? orig.apply(this, arguments) : orig();
+      scheduleSearchCleanup();
+      return r;
+    };
+    window.pvBDSCRenderVatTuSearch.__pv46 = true;
+  })();
+
+  /* ── Init ── */
+  reInjectTypes();
+  setTimeout(reInjectTypes, 1000);
+  setTimeout(reInjectTypes, 3000);
+  setTimeout(scheduleSearchCleanup, 500);
+
+  // Apply patches after scripts settle
+  setTimeout(function(){
+    (function(){
+      var orig = window.pvBDSCSyncInBackground_;
+      if(orig && !orig.__pv46){
+        window.pvBDSCSyncInBackground_ = async function(){
+          var r = orig.apply ? await orig.apply(this, arguments) : await orig();
+          reInjectTypes();
+          return r;
+        };
+        window.pvBDSCSyncInBackground_.__pv46 = true;
+      }
+    })();
+    (function(){
+      var orig = window.pvBDSCRefreshFastData_;
+      if(orig && !orig.__pv46){
+        window.pvBDSCRefreshFastData_ = function(){
+          var r = orig.apply(this, arguments);
+          reInjectTypes();
+          return r;
+        };
+        window.pvBDSCRefreshFastData_.__pv46 = true;
+      }
+    })();
+    (function(){
+      var orig = window.pvBDSCRenderVatTuSearch;
+      if(orig && !orig.__pv46){
+        window.pvBDSCRenderVatTuSearch = function(){
+          var r = orig.apply ? orig.apply(this, arguments) : orig();
+          scheduleSearchCleanup();
+          return r;
+        };
+        window.pvBDSCRenderVatTuSearch.__pv46 = true;
+      }
+    })();
+  }, 600);
+
+})();
+</script>
