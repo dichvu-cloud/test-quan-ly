@@ -4726,19 +4726,84 @@ function buildLifecycleData() {
     const lastGio = lastEvt.gio;
     const lastMaMay = lastEvt.maMay;
 
-    // Tập hợp mẫu tuổi thọ để tính định mức:
-    // Ưu tiên: các lần thay KHÔNG phải lần đầu tiên (prevGio known)
-    // Nếu không đủ mẫu: bổ sung cả lần đầu tiên
-    const nonFirstSamples = events.filter(e => !e.isFirstReplace && e.lifeHours !== null && e.lifeHours > 0);
-    const allSamples = events.filter(e => e.lifeHours !== null && e.lifeHours > 0);
-    const samples = nonFirstSamples.length >= 1 ? nonFirstSamples : allSamples;
+    // ── Tính định mức tuổi thọ (YC1) ──────────────────────────
+    // Bước 1: Tính tuổi thọ từng lần theo mã máy riêng biệt:
+    //   lần 1 = gioThayLan1 - 0
+    //   lần n = gioThayLanN - gioThayLan(n-1)
+    // Gom tất cả lần thay trừ lần thay CUỐI CÙNG của mỗi mã máy → định mức sơ bộ
+    // Bước 2: Với mỗi mã máy, nếu (gioHienTai - gioLanCuoi) > dinhMucSoBo → thêm vào, tính lại TB
+    //   (chỉ một lần, không lặp)
+
+    // Nhóm events theo mã máy, sort tăng dần theo gio (đã sort ở trên theo date, nhưng sort theo gio trong máy)
+    const eventsByMachine = {};
+    events.forEach(e => {
+      const mm = e.maMay || '__unknown__';
+      if (!eventsByMachine[mm]) eventsByMachine[mm] = [];
+      eventsByMachine[mm].push(e);
+    });
+    // Với mỗi máy, tính lifeHours riêng theo đúng công thức yêu cầu:
+    // lần 1 = gio - 0, lần n = gio - gio_lần_(n-1)
+    // Lưu ý: trong events đã có sẵn gio và prevGio từ buildLifecycleData
+    // Tuy nhiên prevGio là gio của BC trước trên cùng máy (không nhất thiết là lần thay trước)
+    // Theo YC1, ta cần dùng: cho từng máy, lấy danh sách lần thay sắp xếp theo gio tăng dần
+    // rồi tính: lan[0].life = lan[0].gio, lan[i].life = lan[i].gio - lan[i-1].gio
+
+    const samplesForDinhMuc = []; // tất cả lần trừ lần cuối mỗi máy
+    const lastEvtByMachine = {};   // lần cuối mỗi máy
+
+    Object.entries(eventsByMachine).forEach(([mm, evts]) => {
+      // Sort theo gio tăng dần
+      const sorted = [...evts].sort((a, b) => (a.gio || 0) - (b.gio || 0));
+      sorted.forEach((e, i) => {
+        const life = i === 0 ? (e.gio || 0) : ((e.gio || 0) - (sorted[i-1].gio || 0));
+        e._yc1Life = life > 0 ? life : 0;
+      });
+      // Lần cuối
+      lastEvtByMachine[mm] = sorted[sorted.length - 1];
+      // Tất cả trừ lần cuối → vào samplesForDinhMuc
+      sorted.slice(0, sorted.length - 1).forEach(e => {
+        if (e._yc1Life > 0) samplesForDinhMuc.push(e._yc1Life);
+      });
+      // Nếu chỉ có 1 lần thay: lần đó là lần đầu = gio - 0, nó CŨNG là lần cuối
+      // Vẫn dùng nó làm định mức sơ bộ (vào allSamples bên dưới)
+    });
+
+    // Nếu không có mẫu nào (mỗi máy chỉ 1 lần thay → slice trả về rỗng),
+    // dùng lần đầu tiên (= duy nhất) của mỗi máy làm định mức sơ bộ
+    const soBoPrimary = samplesForDinhMuc.length > 0
+      ? samplesForDinhMuc
+      : Object.values(eventsByMachine).map(evts => {
+          const sorted = [...evts].sort((a, b) => (a.gio||0)-(b.gio||0));
+          return sorted[0]?._yc1Life || 0;
+        }).filter(h => h > 0);
+
+    let avgGioSoBo = null;
+    if (soBoPrimary.length >= 1) {
+      avgGioSoBo = Math.round(soBoPrimary.reduce((a, b) => a + b, 0) / soBoPrimary.length);
+    }
+
+    // Bước 2: với từng mã máy lần cuối, kiểm tra gioHienTai - gioLanCuoi vs định mức sơ bộ
+    const finalSamples = [...soBoPrimary];
+    if (avgGioSoBo !== null) {
+      Object.entries(lastEvtByMachine).forEach(([mm, lastE]) => {
+        const gioHT = latestGioByMachine[mm] || 0;
+        if (gioHT > 0 && lastE.gio > 0) {
+          const diff = gioHT - lastE.gio;
+          if (diff > avgGioSoBo) {
+            finalSamples.push(diff);
+          }
+        }
+      });
+    }
+
+    // samples dùng cho hiển thị chi tiết (giữ tương thích giao diện)
+    const samples = events.filter(e => e.lifeHours !== null && e.lifeHours > 0);
 
     let avgGio = null, stdGio = null, cvPct = null;
-    if (samples.length >= 1) {
-      const lifes = samples.map(e => e.lifeHours);
-      avgGio = Math.round(lifes.reduce((a, b) => a + b, 0) / lifes.length);
-      if (lifes.length >= 2) {
-        const variance = lifes.reduce((a, d) => a + Math.pow(d - avgGio, 2), 0) / lifes.length;
+    if (finalSamples.length >= 1) {
+      avgGio = Math.round(finalSamples.reduce((a, b) => a + b, 0) / finalSamples.length);
+      if (finalSamples.length >= 2) {
+        const variance = finalSamples.reduce((a, d) => a + Math.pow(d - avgGio, 2), 0) / finalSamples.length;
         stdGio = Math.round(Math.sqrt(variance));
         cvPct = avgGio > 0 ? Math.round(stdGio / avgGio * 100) : null;
       }
@@ -5433,8 +5498,15 @@ function lcShowBarDetail(title, rows, colHeaders, repIds) {
   const dateStr = `${dt.getFullYear()}.${String(dt.getMonth()+1).padStart(2,'0')}.${String(dt.getDate()).padStart(2,'0')}`;
   const safeTitle = (title||'').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 
-  // Build BDSC report rows nếu có repIds
-  const bdscReps = (repIds||[]).map(id => REPORTS.find(r=>r.id===id)).filter(Boolean);
+  // YC4: Hiển thị TẤT CẢ báo cáo BDSC liên quan đến tên hạng mục này
+  // Lấy tên từ title (e.g. "Chi tiết: Bugi (5 lần)" → "Bugi")
+  const _lcPartNameFromTitle = (t => {
+    const m = t.match(/Chi tiết:\s*(.+?)\s*\(|Định mức TB:\s*(.+?)\s*\(|(.+?)\s*—\s*Máy/);
+    return (m&&(m[1]||m[2]||m[3]))||t;
+  })(title||'');
+  const bdscReps = typeof lcGetAllBdscForPart === 'function'
+    ? lcGetAllBdscForPart(_lcPartNameFromTitle)
+    : (repIds||[]).map(id => REPORTS.find(r=>r.id===id)).filter(Boolean);
 
   modal.innerHTML = `<div class="modal wide" style="max-width:900px;max-height:85vh;overflow-y:auto">
     <div class="mh" style="background:linear-gradient(135deg,var(--s2),var(--s3));display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
@@ -5542,29 +5614,534 @@ function lcExportDetailPDF(title) {
     ${(r.phen||[]).map(p=>`<div style="margin-top:4px;font-size:10px;color:#475569">• ${p.ht||''} ${(p.parts||[]).map(pt=>`${pt.name}(${pt.loai})`).join(', ')}</div>`).join('')}
   </div>`).join('')}` : ''}
   <\u0073cript>window.onload=function(){window.print();}<\/script>
-  </body></html>`;
+  </body>
+<script id="yc2-vattu-may-autofill">
+/* YC2 — Tự động điền loại & số lượng vật tư theo mã máy từ sheet "Vật tư máy" */
+(function(){
+  if(window.__yc2Done) return;
+  window.__yc2Done = true;
+
+  // Chuẩn hóa chuỗi để so sánh
+  function n(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/đ/g,'d').replace(/\s+/g,' ').trim(); }
+
+  // Tên cột linh kiện trong sheet "Vật tư máy" → tên linh kiện chuẩn
+  var PART_ALIASES = {
+    'bugi': ['bugi'],
+    'loc nhot 1': ['loc nhot 1','loc nhot/nuoc so 1','loc nhot so 1','loc dau 1'],
+    'loc nhot 2': ['loc nhot 2','loc nhot/nuoc so 2','loc nhot so 2','loc nuoc/nhot so 2','loc dau 2'],
+    'loc gio': ['loc gio','bau loc gio','bau loc gio / cum loc gio'],
+    'o bi cu phat': ['o bi cu phat','o bi may phat','o bi generator'],
+    'o bi truc danh lua': ['o bi truc danh lua','o bi truc','o bi danh lua'],
+    'day cu roa 1': ['day cu roa 1','day curoa 1','day curoa so 1','day cu roa so 1'],
+    'day cu roa 2': ['day cu roa 2','day curoa 2','day curoa so 2','day cu roa so 2'],
+    'day cu roa 3': ['day cu roa 3','day curoa 3','day curoa so 3','day cu roa so 3']
+  };
+
+  // Tên linh kiện chuẩn → các tên có thể match trong partPickerBody / pvb_selectedItems
+  var PART_MATCH_NAMES = {
+    'bugi': ['bugi'],
+    'loc nhot 1': ['loc nhot 1','loc nhot so 1','loc dau 1'],
+    'loc nhot 2': ['loc nhot 2','loc nhot so 2','loc nuoc/nhot so 2','loc nuoc nhot so 2','loc dau 2'],
+    'loc gio': ['loc gio','bau loc gio','bau loc gio / cum loc gio'],
+    'o bi cu phat': ['o bi cu phat'],
+    'o bi truc danh lua': ['o bi truc danh lua','o bi truc'],
+    'day cu roa 1': ['day cu roa 1','day curoa 1','day curoa so 1'],
+    'day cu roa 2': ['day cu roa 2','day curoa 2','day curoa so 2'],
+    'day cu roa 3': ['day cu roa 3','day curoa 3','day curoa so 3']
+  };
+
+  // Tìm partKey từ tên cột sheet
+  function findPartKey(colName) {
+    var nc = n(colName);
+    for (var key in PART_ALIASES) {
+      var aliases = PART_ALIASES[key];
+      for (var i=0;i<aliases.length;i++) {
+        if (nc === aliases[i] || nc.indexOf(aliases[i]) >= 0 || aliases[i].indexOf(nc) >= 0) return key;
+      }
+    }
+    return null;
+  }
+
+  // Lấy data từ vatTuCoDinh hoặc vatTu — sheet "Vật tư máy"
+  // Cấu trúc: mỗi row có Mã Máy, và các cột (Bugi_loai, Bugi_sl, Lọc nhớt 1_loai, ...)
+  // hoặc object có key kiểu {'Bugi': {loai:'BKR6E', sl:4}, ...}
+  function getVatTuMapForMay(maMay) {
+    if (!maMay) return null;
+    var p = window.PV;
+    if (!p || !p.data) return null;
+    var nm = n(maMay);
+
+    // Tìm trong vatTuMay (nếu server trả về riêng)
+    var sources = [];
+    if (Array.isArray(p.data.vatTuMay)) sources = sources.concat(p.data.vatTuMay);
+    if (Array.isArray(p.data.vatTuCoDinh)) {
+      // vatTuCoDinh có thể chứa rows kiểu "Vật tư máy"
+      p.data.vatTuCoDinh.forEach(function(r) {
+        var mm = String(r['Mã Máy']||r['Mã máy']||r['maMay']||'').trim();
+        if (mm) sources.push(r);
+      });
+    }
+
+    for (var i=0;i<sources.length;i++) {
+      var row = sources[i];
+      var rowMay = String(row['Mã Máy']||row['Mã máy']||row['maMay']||'').trim();
+      if (!rowMay) continue;
+      if (n(rowMay) !== nm) continue;
+
+      // Tìm thấy row của mã máy này — parse các cột linh kiện
+      var map = {};
+      Object.keys(row).forEach(function(col) {
+        var pk = findPartKey(col);
+        if (!pk) return;
+        var val = row[col];
+        if (!val) return;
+        // val có thể là string (loại) hoặc số (sl) hoặc object {loai, sl}
+        if (typeof val === 'object' && val !== null) {
+          if (!map[pk]) map[pk] = {};
+          if (val.loai) map[pk].loai = val.loai;
+          if (val.sl || val.soLuong) map[pk].sl = parseInt(val.sl||val.soLuong)||1;
+        } else if (typeof val === 'string') {
+          // Kiểm tra nếu cột tên có _loai hoặc _sl suffix
+          var nc2 = n(col);
+          if (!map[pk]) map[pk] = {};
+          if (nc2.endsWith('_loai') || nc2.endsWith('loai')) {
+            map[pk].loai = val;
+          } else if (nc2.endsWith('_sl') || nc2.endsWith('so luong') || nc2.endsWith('dinh muc')) {
+            map[pk].sl = parseInt(val)||1;
+          } else {
+            // Cột đơn chứa tên loại
+            if (!isNaN(parseFloat(val))) map[pk].sl = parseInt(val)||1;
+            else map[pk].loai = val;
+          }
+        } else if (typeof val === 'number') {
+          if (!map[pk]) map[pk] = {};
+          map[pk].sl = val;
+        }
+      });
+      return Object.keys(map).length > 0 ? map : null;
+    }
+    return null;
+  }
+
+  // Kiểm tra tên linh kiện có khớp partKey không
+  function matchesPartKey(partName, partKey) {
+    var np = n(partName);
+    var names = PART_MATCH_NAMES[partKey] || [partKey];
+    for (var i=0;i<names.length;i++) {
+      if (np === names[i] || np.indexOf(names[i]) >= 0 || names[i].indexOf(np) >= 0) return true;
+    }
+    return false;
+  }
+
+  // Lấy tên gốc (bỏ phần loại trong ngoặc/gạch ngang)
+  function baseName(s) {
+    return String(s||'').replace(/\s*[\-–—(].*$/,'').trim();
+  }
+
+  // Auto-fill cho partPickerBody
+  function autofillPartPicker(maMay) {
+    if (!maMay) return;
+    var vtMap = getVatTuMapForMay(maMay);
+    if (!vtMap) return;
+    var body = document.getElementById('partPickerBody');
+    if (!body) return;
+    body.querySelectorAll('.pi-row').forEach(function(row) {
+      var lbl = row.querySelector('.pi-name');
+      if (!lbl) return;
+      var ten = baseName(lbl.textContent.trim());
+      // Tìm partKey khớp
+      for (var pk in vtMap) {
+        if (!matchesPartKey(ten, pk)) continue;
+        var info = vtMap[pk];
+        // Set loại (dropdown .pi-loai-sel)
+        if (info.loai) {
+          var loaiSel = row.querySelector('.pi-loai-sel');
+          if (loaiSel) {
+            // Tìm option khớp
+            var found = false;
+            for (var i=0;i<loaiSel.options.length;i++) {
+              if (n(loaiSel.options[i].value) === n(info.loai) || n(loaiSel.options[i].text) === n(info.loai)) {
+                loaiSel.selectedIndex = i; found = true; break;
+              }
+            }
+            if (!found && info.loai) {
+              // Thêm option mới nếu chưa có
+              var opt = document.createElement('option');
+              opt.value = info.loai; opt.text = info.loai; opt.selected = true;
+              loaiSel.appendChild(opt);
+            }
+            loaiSel.dispatchEvent(new Event('change'));
+          }
+        }
+        // Set số lượng
+        if (info.sl && info.sl > 0) {
+          var qtyInp = row.querySelector('input[type=number]');
+          if (qtyInp) { qtyInp.value = info.sl; qtyInp.dispatchEvent(new Event('input')); }
+        }
+        break;
+      }
+    });
+  }
+
+  // Auto-fill cho pvb_selectedItems (danh sách đã chọn)
+  function autofillSelected(maMay) {
+    if (!maMay) return;
+    var vtMap = getVatTuMapForMay(maMay);
+    if (!vtMap) return;
+    var p = window.PV;
+    if (!p || !p.data || !Array.isArray(p.data.selected)) return;
+    p.data.selected.forEach(function(item) {
+      var ten = baseName(item.tenVatTu||'');
+      for (var pk in vtMap) {
+        if (!matchesPartKey(ten, pk)) continue;
+        var info = vtMap[pk];
+        if (info.loai) item.loaiVatTu = info.loai;
+        if (info.sl && info.sl > 0) item.soLuongCan = info.sl;
+        break;
+      }
+    });
+    // Re-render để phản ánh thay đổi
+    if (typeof pvBDSCRenderSelected === 'function') pvBDSCRenderSelected();
+  }
+
+  // Lấy mã máy hiện tại từ form pv17 hoặc pv16
+  function getCurrentMaMay() {
+    // Ưu tiên từ PV.machines
+    if (window.PV && Array.isArray(PV.machines) && PV.machines.length) {
+      var mm = PV.machines.map(function(m){return m&&m.maMay;}).filter(Boolean);
+      if (mm.length) return mm[0]; // lấy máy đầu tiên
+    }
+    // Fallback từ input
+    var inp = document.getElementById('pv17_mamay_0') || document.getElementById('pv16_mamay_0') || document.getElementById('pvb_maMay');
+    return inp ? inp.value.trim() : '';
+  }
+
+  // Patch pv17SetMachine và pv16SetMachine
+  function patchSetMachine(fnName) {
+    var orig = window[fnName];
+    if (!orig || orig.__yc2) return;
+    window[fnName] = function(i, m) {
+      orig.call(this, i, m);
+      var mm = m && m.maMay;
+      if (!mm) return;
+      setTimeout(function() {
+        autofillSelected(mm);
+        autofillPartPicker(mm);
+      }, 80);
+    };
+    window[fnName].__yc2 = true;
+  }
+
+  setTimeout(function() {
+    patchSetMachine('pv17SetMachine');
+    patchSetMachine('pv16SetMachine');
+  }, 300);
+
+  // Patch MutationObserver trên partPickerBody để auto-fill sau khi mở picker
+  setTimeout(function() {
+    var body = document.getElementById('partPickerBody');
+    if (!body) return;
+    var obs = new MutationObserver(function() {
+      setTimeout(function() {
+        var mm = getCurrentMaMay();
+        if (mm) autofillPartPicker(mm);
+      }, 60);
+    });
+    obs.observe(body, {childList:true, subtree:false});
+  }, 700);
+
+  // Expose để gọi thủ công nếu cần
+  window.yc2AutofillForMay = function(maMay) {
+    autofillSelected(maMay || getCurrentMaMay());
+    autofillPartPicker(maMay || getCurrentMaMay());
+  };
+
+})();
+</script>
+
+<script id="yc3-bdsc-link-complete">
+/* YC3 — Liên kết báo cáo BDSC khi hoàn thành phiếu vật tư */
+(function(){
+  if(window.__yc3Done) return;
+  window.__yc3Done = true;
+
+  function pvN(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/đ/g,'d').replace(/\s+/g,' ').trim(); }
+  function pvE(s){ return String(s||'').replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+
+  // Phân tích ngày (DD/MM/YYYY hoặc YYYY-MM-DD)
+  function parseD(s){
+    if(!s) return null;
+    var m = String(s).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if(m) return new Date(+m[3], +m[2]-1, +m[1]);
+    m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if(m) return new Date(+m[1], +m[2]-1, +m[3]);
+    return null;
+  }
+
+  // Tên gốc: bỏ phần loại trong ngoặc/gạch ngang
+  function baseName(s){ return String(s||'').replace(/\s*[-–—(].*$/,'').trim(); }
+
+  // Tìm các báo cáo BDSC ứng viên để liên kết
+  // - Cùng mã máy với phiếu
+  // - Trong khoảng ±dayRange ngày so với ngày tạo phiếu
+  // - Chưa được liên kết với phiếu vật tư nào (không có trường linkedPhieu)
+  function findCandidateBDSC(phieu, dayRange) {
+    dayRange = dayRange || 10;
+    var maMays = (phieu.danhSachMaMay||phieu.maMay||'').split(/[;,\/]/).map(function(s){return s.trim();}).filter(Boolean);
+    var ngayPhieu = parseD(phieu.ngayTao);
+    var reports = (typeof REPORTS !== 'undefined' ? REPORTS : []).filter(function(r){
+      if(r.status === 'draft') return false;
+      if(r.linkedPhieu) return false; // đã liên kết rồi
+      if(!maMays.some(function(mm){ return pvN(r.maMay||'') === pvN(mm); })) return false;
+      if(ngayPhieu) {
+        var rd = parseD(r.nd||r.cat||'');
+        if(rd) {
+          var diff = Math.abs(rd - ngayPhieu) / (1000*60*60*24);
+          if(diff > dayRange) return false;
+        }
+      }
+      return true;
+    });
+    return reports;
+  }
+
+  // State liên kết hiện tại
+  var _yc3State = { phieu: null, linkedRepId: null, dayRange: 10 };
+
+  // Hiển thị section tìm báo cáo BDSC trong form hoàn thành
+  function renderBDSCLinkSection(phieu) {
+    _yc3State.phieu = phieu;
+    var section = document.getElementById('yc3-bdsc-link-section');
+    if(!section) return;
+    var candidates = findCandidateBDSC(phieu, _yc3State.dayRange);
+    var linked = _yc3State.linkedRepId ? (typeof REPORTS!=='undefined'?REPORTS.find(function(r){return r.id===_yc3State.linkedRepId;}):null) : null;
+
+    var html = '<div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;padding:12px 14px;margin-bottom:12px">';
+    html += '<div style="font-size:13px;font-weight:700;color:#0d6e3f;margin-bottom:8px">🔗 Liên kết báo cáo BDSC</div>';
+
+    if(linked) {
+      html += '<div style="background:#fff;border:1.5px solid #86efac;border-radius:8px;padding:8px 12px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">';
+      html += '<div style="font-size:12px"><span class="b bb" style="margin-right:8px">'+pvE(linked.maMay||'—')+'</span>';
+      html += '<b style="margin-right:6px">'+pvE(linked.id)+'</b>';
+      html += '<span style="color:#475569">'+pvE(linked.nd||linked.cat||'—')+' · '+pvE(linked.ktv1||linked.ktvbc||'—')+'</span></div>';
+      html += '<button class="btn bg-r sm" style="font-size:11px" onclick="yc3CancelLink()">🔄 Hủy liên kết / Chọn lại</button>';
+      html += '</div>';
+    } else {
+      // Bộ lọc thời gian
+      html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">';
+      html += '<span style="font-size:12px;color:#475569">Tìm trong khoảng ±</span>';
+      html += '<input type="number" min="1" max="365" value="'+_yc3State.dayRange+'" id="yc3-day-range" style="width:60px;border:1.5px solid var(--bd);border-radius:6px;padding:3px 6px;font-size:12px" oninput="yc3UpdateDayRange(this.value)">';
+      html += '<span style="font-size:12px;color:#475569">ngày so với ngày tạo phiếu</span>';
+      html += '</div>';
+      if(!candidates.length) {
+        html += '<div style="color:#6b7280;font-size:12px;font-style:italic">Không tìm thấy báo cáo BDSC nào phù hợp. Thử tăng số ngày.</div>';
+      } else {
+        html += '<div style="display:flex;flex-direction:column;gap:5px;max-height:200px;overflow-y:auto">';
+        candidates.forEach(function(r) {
+          html += '<div style="background:#fff;border:1px solid var(--bd);border-radius:6px;padding:7px 10px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">';
+          html += '<div style="font-size:11px"><b>'+pvE(r.id)+'</b> — '+pvE(r.maMay||'—')+' · '+pvE(r.nd||r.cat||'—')+' · KTV: '+pvE(r.ktv1||r.ktvbc||'—')+'</div>';
+          html += '<button class="btn bg-g sm" style="font-size:11px" onclick="yc3SelectBDSC(''+pvE(r.id)+'')">✅ Chọn</button>';
+          html += '</div>';
+        });
+        html += '</div>';
+      }
+    }
+    html += '</div>';
+    section.innerHTML = html;
+  }
+
+  window.yc3UpdateDayRange = function(v) {
+    _yc3State.dayRange = Math.max(1, parseInt(v)||10);
+    if(_yc3State.phieu) renderBDSCLinkSection(_yc3State.phieu);
+  };
+
+  window.yc3CancelLink = function() {
+    _yc3State.linkedRepId = null;
+    if(_yc3State.phieu) renderBDSCLinkSection(_yc3State.phieu);
+  };
+
+  window.yc3SelectBDSC = function(repId) {
+    _yc3State.linkedRepId = repId;
+    var phieu = _yc3State.phieu;
+    var rep = (typeof REPORTS!=='undefined'?REPORTS.find(function(r){return r.id===repId;}):null);
+    if(phieu) renderBDSCLinkSection(phieu);
+    if(rep) yc3AutoFillFromBDSC(rep);
+  };
+
+  // Tự động điền bảng hoàn thành từ báo cáo BDSC đã chọn
+  function yc3AutoFillFromBDSC(rep) {
+    // Thu thập vật tư từ báo cáo BDSC
+    var bdscParts = {}; // baseName → số lượng
+    (rep.phen||[]).forEach(function(p) {
+      Object.entries(p.parts||{}).forEach(function(entry) {
+        var k = entry[0], v = entry[1];
+        var sl = typeof v === 'object' ? (parseInt(v.sl)||1) : 1;
+        var bn = pvN(baseName(k));
+        bdscParts[bn] = (bdscParts[bn]||0) + sl;
+      });
+    });
+
+    // Điền vào bảng hoàn thành
+    var tbody = document.querySelector('#pv18_complete_table tbody') ||
+                document.querySelector('#pv17_complete_table tbody') ||
+                document.querySelector('#pv16_complete_table tbody');
+    if(!tbody) return;
+
+    var matchedKeys = new Set();
+    tbody.querySelectorAll('tr').forEach(function(tr) {
+      var tenInp = tr.querySelector('[data-k="tenVatTu"]');
+      if(!tenInp) return;
+      var ten = tenInp.value || '';
+      var bn = pvN(baseName(ten));
+      var sxInp = tr.querySelector('[data-k="soLuongXuatKho"]');
+      var suDungInp = tr.querySelector('[data-k="soLuongSuDung"]');
+      var nhapKhoInp = tr.querySelector('[data-k="soLuongNhapKho"]');
+      var tinhTrangSel = tr.querySelector('[data-k="tinhTrangNhapKho"]');
+      var sx = parseInt((sxInp&&sxInp.value)||'0')||0;
+
+      if(bdscParts[bn] !== undefined) {
+        var used = bdscParts[bn];
+        matchedKeys.add(bn);
+        if(suDungInp) suDungInp.value = used;
+        if(nhapKhoInp) nhapKhoInp.value = Math.max(0, sx - used);
+        // tinhTrang: giữ nguyên giá trị xuất kho (nếu có field tinhTrangXuatKho ẩn)
+        var ttXuat = tr.querySelector('[data-k="tinhTrangXuatKho"]');
+        if(tinhTrangSel && ttXuat && ttXuat.value) tinhTrangSel.value = ttXuat.value;
+      } else {
+        // Không khớp → dùng 0
+        if(suDungInp) suDungInp.value = 0;
+        if(nhapKhoInp) nhapKhoInp.value = sx;
+      }
+    });
+
+    // Vật tư phát sinh: có trong BDSC nhưng không có trong phiếu
+    var allBn = Object.keys(bdscParts);
+    allBn.forEach(function(bn) {
+      if(matchedKeys.has(bn)) return;
+      var sl = bdscParts[bn];
+      // Tìm tên gốc (không normalize)
+      var origName = bn; // fallback
+      (rep.phen||[]).forEach(function(p) {
+        Object.keys(p.parts||{}).forEach(function(k) {
+          if(pvN(baseName(k)) === bn) origName = baseName(k);
+        });
+      });
+      // Thêm dòng mới vào cuối tbody
+      var i = tbody.children.length;
+      var newRow = document.createElement('tr');
+      newRow.innerHTML =
+        '<td style="text-align:center">'+(i+1)+'</td>' +
+        '<td><input value="'+pvE(origName)+'" data-k="tenVatTu"></td>' +
+        '<td><input type="number" min="0" value="0" data-k="soLuongXuatKho"></td>' +
+        '<td><input type="number" min="0" value="'+pvE(String(sl))+'" data-k="soLuongSuDung"></td>' +
+        '<td><input type="number" min="0" value="0" data-k="soLuongNhapKho"></td>' +
+        '<td><select data-k="tinhTrangNhapKho">'+['','Mới','Cũ','Tốt','Hỏng'].map(function(s){return '<option>'+s+'</option>';}).join('')+'</select></td>' +
+        '<td><input value="" data-k="ghiChu"></td>' +
+        '<td><select data-k="loaiDong"><option>Chuẩn bị</option><option selected>Phát sinh</option></select></td>';
+      tbody.appendChild(newRow);
+    });
+
+    if(typeof toast === 'function') toast('✅ Đã điền tự động từ báo cáo BDSC', 'ok');
+  }
+
+  // Patch pv17RenderCompleteForm để inject YC3 section
+  var _yc3OrigRender = null;
+  function patchCompleteForm() {
+    var orig = window.pv17RenderCompleteForm;
+    if(!orig || orig.__yc3) return;
+    _yc3OrigRender = orig;
+    window.pv17RenderCompleteForm = function(root, phieu, items) {
+      _yc3State.linkedRepId = null;
+      _yc3State.phieu = phieu;
+      _yc3State.dayRange = 10;
+      orig.call(this, root, phieu, items);
+      // Inject section sau .cb (header)
+      var card = root.querySelector('.card');
+      if(!card) return;
+      var actionBar = card.querySelector('.pv18-form-actions') || card.querySelector('[style*="Thêm vật tư"]');
+      var section = document.createElement('div');
+      section.id = 'yc3-bdsc-link-section';
+      // Chèn trước bảng hoàn thành
+      var scroll = card.querySelector('.pv18-scroll,.pv17-scroll,.pv16-scroll');
+      if(scroll) card.insertBefore(section, scroll);
+      else card.appendChild(section);
+      renderBDSCLinkSection(phieu);
+    };
+    window.pv17RenderCompleteForm.__yc3 = true;
+    window.pv16RenderCompleteForm = window.pv17RenderCompleteForm;
+  }
+
+  // Patch pv17SubmitComplete để lưu linkedPhieu vào báo cáo BDSC
+  function patchSubmitComplete() {
+    var origSubmit17 = window.pv17SubmitComplete;
+    var origSubmit16 = window.pv16SubmitComplete;
+    function wrapSubmit(orig) {
+      if(!orig || orig.__yc3) return orig;
+      var wrapped = async function(maPhieu) {
+        var linkedId = _yc3State.linkedRepId;
+        await orig.call(this, maPhieu);
+        // Sau khi lưu thành công, đánh dấu báo cáo BDSC đã liên kết
+        if(linkedId && typeof REPORTS !== 'undefined') {
+          var rep = REPORTS.find(function(r){ return r.id === linkedId; });
+          if(rep) {
+            rep.linkedPhieu = maPhieu;
+            if(typeof save === 'function') save();
+          }
+        }
+      };
+      wrapped.__yc3 = true;
+      return wrapped;
+    }
+    if(origSubmit17) window.pv17SubmitComplete = wrapSubmit(origSubmit17);
+    if(origSubmit16) window.pv16SubmitComplete = wrapSubmit(origSubmit16);
+  }
+
+  setTimeout(function() {
+    patchCompleteForm();
+    patchSubmitComplete();
+  }, 400);
+
+  // Re-patch nếu hàm được ghi đè sau
+  setTimeout(function() {
+    patchCompleteForm();
+    patchSubmitComplete();
+  }, 1200);
+
+})();
+</script>
+</html>`;
   const w = window.open('','_blank');
   if(w){ w.document.write(html); w.document.close(); }
   else toast('Vui lòng cho phép popup để xuất PDF','warn');
 }
 
-// Build detail rows for a part name — kèm repIds để link về BC thực
+// Build detail rows for a part name — kèm repIds (YC4: TẤT CẢ lần thay, không giới hạn)
 function lcGetPartDetailRows(partName, filterMachine) {
   const data = buildLifecycleData();
   const d = data.find(x => x.name === partName); if(!d) return { rows:[], repIds:[] };
-  const samples = d.samples
-    .filter(s => s.lifeHours > 0 && (!filterMachine || s.maMay === filterMachine))
+  // YC4: dùng d.events (tất cả lần thay) thay vì d.samples đã filter
+  const allEvents = d.events
+    .filter(e => (!filterMachine || e.maMay === filterMachine))
     .sort((a,b)=>{ const da=parseVNDate(a.date)||new Date(0), db=parseVNDate(b.date)||new Date(0); return db-da; });
   return {
-    rows: samples.map(s => [
-      s.maMay!=='__unknown__'?s.maMay:'—',
-      s.date||'—',
-      formatHoursToDuration(s.prevGio||0)||'—',
-      formatHoursToDuration(s.gio)||'—',
-      s.lifeHours ? formatHoursToDuration(s.lifeHours)+'h' : '—',
+    rows: allEvents.map(e => [
+      e.maMay!=='__unknown__'?e.maMay:'—',
+      e.date||'—',
+      e.prevGio > 0 ? formatHoursToDuration(e.prevGio) : '—',
+      e.gio > 0 ? formatHoursToDuration(e.gio) : '—',
+      e.lifeHours > 0 ? formatHoursToDuration(e.lifeHours)+'h' : '—',
     ]),
-    repIds: samples.map(s => s.repId||null)
+    repIds: allEvents.map(e => e.repId||null)
   };
+}
+
+// Lấy tất cả BDSC liên quan đến một tên vật tư (YC4)
+function lcGetAllBdscForPart(partName) {
+  const norm = s => String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/đ/g,'d').trim();
+  const np = norm(partName);
+  return REPORTS.filter(r => r.status !== 'draft' && (r.phen||[]).some(p =>
+    Object.keys(p.parts||{}).some(k => norm(k) === np)
+  ));
 }
 
 function updateLifecycleBadge(data) {
@@ -7232,7 +7809,251 @@ ${ktv2Line}
   </tr>
 </table>
 
-</body></html>`;
+</body>
+<script id="yc2-vattu-may-autofill">
+/* YC2 — Tự động điền loại & số lượng vật tư theo mã máy từ sheet "Vật tư máy" */
+(function(){
+  if(window.__yc2Done) return;
+  window.__yc2Done = true;
+
+  // Chuẩn hóa chuỗi để so sánh
+  function n(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/đ/g,'d').replace(/\s+/g,' ').trim(); }
+
+  // Tên cột linh kiện trong sheet "Vật tư máy" → tên linh kiện chuẩn
+  var PART_ALIASES = {
+    'bugi': ['bugi'],
+    'loc nhot 1': ['loc nhot 1','loc nhot/nuoc so 1','loc nhot so 1','loc dau 1'],
+    'loc nhot 2': ['loc nhot 2','loc nhot/nuoc so 2','loc nhot so 2','loc nuoc/nhot so 2','loc dau 2'],
+    'loc gio': ['loc gio','bau loc gio','bau loc gio / cum loc gio'],
+    'o bi cu phat': ['o bi cu phat','o bi may phat','o bi generator'],
+    'o bi truc danh lua': ['o bi truc danh lua','o bi truc','o bi danh lua'],
+    'day cu roa 1': ['day cu roa 1','day curoa 1','day curoa so 1','day cu roa so 1'],
+    'day cu roa 2': ['day cu roa 2','day curoa 2','day curoa so 2','day cu roa so 2'],
+    'day cu roa 3': ['day cu roa 3','day curoa 3','day curoa so 3','day cu roa so 3']
+  };
+
+  // Tên linh kiện chuẩn → các tên có thể match trong partPickerBody / pvb_selectedItems
+  var PART_MATCH_NAMES = {
+    'bugi': ['bugi'],
+    'loc nhot 1': ['loc nhot 1','loc nhot so 1','loc dau 1'],
+    'loc nhot 2': ['loc nhot 2','loc nhot so 2','loc nuoc/nhot so 2','loc nuoc nhot so 2','loc dau 2'],
+    'loc gio': ['loc gio','bau loc gio','bau loc gio / cum loc gio'],
+    'o bi cu phat': ['o bi cu phat'],
+    'o bi truc danh lua': ['o bi truc danh lua','o bi truc'],
+    'day cu roa 1': ['day cu roa 1','day curoa 1','day curoa so 1'],
+    'day cu roa 2': ['day cu roa 2','day curoa 2','day curoa so 2'],
+    'day cu roa 3': ['day cu roa 3','day curoa 3','day curoa so 3']
+  };
+
+  // Tìm partKey từ tên cột sheet
+  function findPartKey(colName) {
+    var nc = n(colName);
+    for (var key in PART_ALIASES) {
+      var aliases = PART_ALIASES[key];
+      for (var i=0;i<aliases.length;i++) {
+        if (nc === aliases[i] || nc.indexOf(aliases[i]) >= 0 || aliases[i].indexOf(nc) >= 0) return key;
+      }
+    }
+    return null;
+  }
+
+  // Lấy data từ vatTuCoDinh hoặc vatTu — sheet "Vật tư máy"
+  // Cấu trúc: mỗi row có Mã Máy, và các cột (Bugi_loai, Bugi_sl, Lọc nhớt 1_loai, ...)
+  // hoặc object có key kiểu {'Bugi': {loai:'BKR6E', sl:4}, ...}
+  function getVatTuMapForMay(maMay) {
+    if (!maMay) return null;
+    var p = window.PV;
+    if (!p || !p.data) return null;
+    var nm = n(maMay);
+
+    // Tìm trong vatTuMay (nếu server trả về riêng)
+    var sources = [];
+    if (Array.isArray(p.data.vatTuMay)) sources = sources.concat(p.data.vatTuMay);
+    if (Array.isArray(p.data.vatTuCoDinh)) {
+      // vatTuCoDinh có thể chứa rows kiểu "Vật tư máy"
+      p.data.vatTuCoDinh.forEach(function(r) {
+        var mm = String(r['Mã Máy']||r['Mã máy']||r['maMay']||'').trim();
+        if (mm) sources.push(r);
+      });
+    }
+
+    for (var i=0;i<sources.length;i++) {
+      var row = sources[i];
+      var rowMay = String(row['Mã Máy']||row['Mã máy']||row['maMay']||'').trim();
+      if (!rowMay) continue;
+      if (n(rowMay) !== nm) continue;
+
+      // Tìm thấy row của mã máy này — parse các cột linh kiện
+      var map = {};
+      Object.keys(row).forEach(function(col) {
+        var pk = findPartKey(col);
+        if (!pk) return;
+        var val = row[col];
+        if (!val) return;
+        // val có thể là string (loại) hoặc số (sl) hoặc object {loai, sl}
+        if (typeof val === 'object' && val !== null) {
+          if (!map[pk]) map[pk] = {};
+          if (val.loai) map[pk].loai = val.loai;
+          if (val.sl || val.soLuong) map[pk].sl = parseInt(val.sl||val.soLuong)||1;
+        } else if (typeof val === 'string') {
+          // Kiểm tra nếu cột tên có _loai hoặc _sl suffix
+          var nc2 = n(col);
+          if (!map[pk]) map[pk] = {};
+          if (nc2.endsWith('_loai') || nc2.endsWith('loai')) {
+            map[pk].loai = val;
+          } else if (nc2.endsWith('_sl') || nc2.endsWith('so luong') || nc2.endsWith('dinh muc')) {
+            map[pk].sl = parseInt(val)||1;
+          } else {
+            // Cột đơn chứa tên loại
+            if (!isNaN(parseFloat(val))) map[pk].sl = parseInt(val)||1;
+            else map[pk].loai = val;
+          }
+        } else if (typeof val === 'number') {
+          if (!map[pk]) map[pk] = {};
+          map[pk].sl = val;
+        }
+      });
+      return Object.keys(map).length > 0 ? map : null;
+    }
+    return null;
+  }
+
+  // Kiểm tra tên linh kiện có khớp partKey không
+  function matchesPartKey(partName, partKey) {
+    var np = n(partName);
+    var names = PART_MATCH_NAMES[partKey] || [partKey];
+    for (var i=0;i<names.length;i++) {
+      if (np === names[i] || np.indexOf(names[i]) >= 0 || names[i].indexOf(np) >= 0) return true;
+    }
+    return false;
+  }
+
+  // Lấy tên gốc (bỏ phần loại trong ngoặc/gạch ngang)
+  function baseName(s) {
+    return String(s||'').replace(/\s*[\-–—(].*$/,'').trim();
+  }
+
+  // Auto-fill cho partPickerBody
+  function autofillPartPicker(maMay) {
+    if (!maMay) return;
+    var vtMap = getVatTuMapForMay(maMay);
+    if (!vtMap) return;
+    var body = document.getElementById('partPickerBody');
+    if (!body) return;
+    body.querySelectorAll('.pi-row').forEach(function(row) {
+      var lbl = row.querySelector('.pi-name');
+      if (!lbl) return;
+      var ten = baseName(lbl.textContent.trim());
+      // Tìm partKey khớp
+      for (var pk in vtMap) {
+        if (!matchesPartKey(ten, pk)) continue;
+        var info = vtMap[pk];
+        // Set loại (dropdown .pi-loai-sel)
+        if (info.loai) {
+          var loaiSel = row.querySelector('.pi-loai-sel');
+          if (loaiSel) {
+            // Tìm option khớp
+            var found = false;
+            for (var i=0;i<loaiSel.options.length;i++) {
+              if (n(loaiSel.options[i].value) === n(info.loai) || n(loaiSel.options[i].text) === n(info.loai)) {
+                loaiSel.selectedIndex = i; found = true; break;
+              }
+            }
+            if (!found && info.loai) {
+              // Thêm option mới nếu chưa có
+              var opt = document.createElement('option');
+              opt.value = info.loai; opt.text = info.loai; opt.selected = true;
+              loaiSel.appendChild(opt);
+            }
+            loaiSel.dispatchEvent(new Event('change'));
+          }
+        }
+        // Set số lượng
+        if (info.sl && info.sl > 0) {
+          var qtyInp = row.querySelector('input[type=number]');
+          if (qtyInp) { qtyInp.value = info.sl; qtyInp.dispatchEvent(new Event('input')); }
+        }
+        break;
+      }
+    });
+  }
+
+  // Auto-fill cho pvb_selectedItems (danh sách đã chọn)
+  function autofillSelected(maMay) {
+    if (!maMay) return;
+    var vtMap = getVatTuMapForMay(maMay);
+    if (!vtMap) return;
+    var p = window.PV;
+    if (!p || !p.data || !Array.isArray(p.data.selected)) return;
+    p.data.selected.forEach(function(item) {
+      var ten = baseName(item.tenVatTu||'');
+      for (var pk in vtMap) {
+        if (!matchesPartKey(ten, pk)) continue;
+        var info = vtMap[pk];
+        if (info.loai) item.loaiVatTu = info.loai;
+        if (info.sl && info.sl > 0) item.soLuongCan = info.sl;
+        break;
+      }
+    });
+    // Re-render để phản ánh thay đổi
+    if (typeof pvBDSCRenderSelected === 'function') pvBDSCRenderSelected();
+  }
+
+  // Lấy mã máy hiện tại từ form pv17 hoặc pv16
+  function getCurrentMaMay() {
+    // Ưu tiên từ PV.machines
+    if (window.PV && Array.isArray(PV.machines) && PV.machines.length) {
+      var mm = PV.machines.map(function(m){return m&&m.maMay;}).filter(Boolean);
+      if (mm.length) return mm[0]; // lấy máy đầu tiên
+    }
+    // Fallback từ input
+    var inp = document.getElementById('pv17_mamay_0') || document.getElementById('pv16_mamay_0') || document.getElementById('pvb_maMay');
+    return inp ? inp.value.trim() : '';
+  }
+
+  // Patch pv17SetMachine và pv16SetMachine
+  function patchSetMachine(fnName) {
+    var orig = window[fnName];
+    if (!orig || orig.__yc2) return;
+    window[fnName] = function(i, m) {
+      orig.call(this, i, m);
+      var mm = m && m.maMay;
+      if (!mm) return;
+      setTimeout(function() {
+        autofillSelected(mm);
+        autofillPartPicker(mm);
+      }, 80);
+    };
+    window[fnName].__yc2 = true;
+  }
+
+  setTimeout(function() {
+    patchSetMachine('pv17SetMachine');
+    patchSetMachine('pv16SetMachine');
+  }, 300);
+
+  // Patch MutationObserver trên partPickerBody để auto-fill sau khi mở picker
+  setTimeout(function() {
+    var body = document.getElementById('partPickerBody');
+    if (!body) return;
+    var obs = new MutationObserver(function() {
+      setTimeout(function() {
+        var mm = getCurrentMaMay();
+        if (mm) autofillPartPicker(mm);
+      }, 60);
+    });
+    obs.observe(body, {childList:true, subtree:false});
+  }, 700);
+
+  // Expose để gọi thủ công nếu cần
+  window.yc2AutofillForMay = function(maMay) {
+    autofillSelected(maMay || getCurrentMaMay());
+    autofillPartPicker(maMay || getCurrentMaMay());
+  };
+
+})();
+</script>
+</html>`;
 
     // Kiểm tra placeholder sót
     if(/\{\{[A-Z_]+\}\}/.test(html)){
@@ -7415,7 +8236,251 @@ function showPrintModal(html, fname, reportId){
           .sign-name { font-size:12pt; font-weight:bold; }
         </style>
       </head>
-      <body><div class="Section1">${bodyOnly}</div></body></html>`;
+      <body><div class="Section1">${bodyOnly}</div></body>
+<script id="yc2-vattu-may-autofill">
+/* YC2 — Tự động điền loại & số lượng vật tư theo mã máy từ sheet "Vật tư máy" */
+(function(){
+  if(window.__yc2Done) return;
+  window.__yc2Done = true;
+
+  // Chuẩn hóa chuỗi để so sánh
+  function n(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/đ/g,'d').replace(/\s+/g,' ').trim(); }
+
+  // Tên cột linh kiện trong sheet "Vật tư máy" → tên linh kiện chuẩn
+  var PART_ALIASES = {
+    'bugi': ['bugi'],
+    'loc nhot 1': ['loc nhot 1','loc nhot/nuoc so 1','loc nhot so 1','loc dau 1'],
+    'loc nhot 2': ['loc nhot 2','loc nhot/nuoc so 2','loc nhot so 2','loc nuoc/nhot so 2','loc dau 2'],
+    'loc gio': ['loc gio','bau loc gio','bau loc gio / cum loc gio'],
+    'o bi cu phat': ['o bi cu phat','o bi may phat','o bi generator'],
+    'o bi truc danh lua': ['o bi truc danh lua','o bi truc','o bi danh lua'],
+    'day cu roa 1': ['day cu roa 1','day curoa 1','day curoa so 1','day cu roa so 1'],
+    'day cu roa 2': ['day cu roa 2','day curoa 2','day curoa so 2','day cu roa so 2'],
+    'day cu roa 3': ['day cu roa 3','day curoa 3','day curoa so 3','day cu roa so 3']
+  };
+
+  // Tên linh kiện chuẩn → các tên có thể match trong partPickerBody / pvb_selectedItems
+  var PART_MATCH_NAMES = {
+    'bugi': ['bugi'],
+    'loc nhot 1': ['loc nhot 1','loc nhot so 1','loc dau 1'],
+    'loc nhot 2': ['loc nhot 2','loc nhot so 2','loc nuoc/nhot so 2','loc nuoc nhot so 2','loc dau 2'],
+    'loc gio': ['loc gio','bau loc gio','bau loc gio / cum loc gio'],
+    'o bi cu phat': ['o bi cu phat'],
+    'o bi truc danh lua': ['o bi truc danh lua','o bi truc'],
+    'day cu roa 1': ['day cu roa 1','day curoa 1','day curoa so 1'],
+    'day cu roa 2': ['day cu roa 2','day curoa 2','day curoa so 2'],
+    'day cu roa 3': ['day cu roa 3','day curoa 3','day curoa so 3']
+  };
+
+  // Tìm partKey từ tên cột sheet
+  function findPartKey(colName) {
+    var nc = n(colName);
+    for (var key in PART_ALIASES) {
+      var aliases = PART_ALIASES[key];
+      for (var i=0;i<aliases.length;i++) {
+        if (nc === aliases[i] || nc.indexOf(aliases[i]) >= 0 || aliases[i].indexOf(nc) >= 0) return key;
+      }
+    }
+    return null;
+  }
+
+  // Lấy data từ vatTuCoDinh hoặc vatTu — sheet "Vật tư máy"
+  // Cấu trúc: mỗi row có Mã Máy, và các cột (Bugi_loai, Bugi_sl, Lọc nhớt 1_loai, ...)
+  // hoặc object có key kiểu {'Bugi': {loai:'BKR6E', sl:4}, ...}
+  function getVatTuMapForMay(maMay) {
+    if (!maMay) return null;
+    var p = window.PV;
+    if (!p || !p.data) return null;
+    var nm = n(maMay);
+
+    // Tìm trong vatTuMay (nếu server trả về riêng)
+    var sources = [];
+    if (Array.isArray(p.data.vatTuMay)) sources = sources.concat(p.data.vatTuMay);
+    if (Array.isArray(p.data.vatTuCoDinh)) {
+      // vatTuCoDinh có thể chứa rows kiểu "Vật tư máy"
+      p.data.vatTuCoDinh.forEach(function(r) {
+        var mm = String(r['Mã Máy']||r['Mã máy']||r['maMay']||'').trim();
+        if (mm) sources.push(r);
+      });
+    }
+
+    for (var i=0;i<sources.length;i++) {
+      var row = sources[i];
+      var rowMay = String(row['Mã Máy']||row['Mã máy']||row['maMay']||'').trim();
+      if (!rowMay) continue;
+      if (n(rowMay) !== nm) continue;
+
+      // Tìm thấy row của mã máy này — parse các cột linh kiện
+      var map = {};
+      Object.keys(row).forEach(function(col) {
+        var pk = findPartKey(col);
+        if (!pk) return;
+        var val = row[col];
+        if (!val) return;
+        // val có thể là string (loại) hoặc số (sl) hoặc object {loai, sl}
+        if (typeof val === 'object' && val !== null) {
+          if (!map[pk]) map[pk] = {};
+          if (val.loai) map[pk].loai = val.loai;
+          if (val.sl || val.soLuong) map[pk].sl = parseInt(val.sl||val.soLuong)||1;
+        } else if (typeof val === 'string') {
+          // Kiểm tra nếu cột tên có _loai hoặc _sl suffix
+          var nc2 = n(col);
+          if (!map[pk]) map[pk] = {};
+          if (nc2.endsWith('_loai') || nc2.endsWith('loai')) {
+            map[pk].loai = val;
+          } else if (nc2.endsWith('_sl') || nc2.endsWith('so luong') || nc2.endsWith('dinh muc')) {
+            map[pk].sl = parseInt(val)||1;
+          } else {
+            // Cột đơn chứa tên loại
+            if (!isNaN(parseFloat(val))) map[pk].sl = parseInt(val)||1;
+            else map[pk].loai = val;
+          }
+        } else if (typeof val === 'number') {
+          if (!map[pk]) map[pk] = {};
+          map[pk].sl = val;
+        }
+      });
+      return Object.keys(map).length > 0 ? map : null;
+    }
+    return null;
+  }
+
+  // Kiểm tra tên linh kiện có khớp partKey không
+  function matchesPartKey(partName, partKey) {
+    var np = n(partName);
+    var names = PART_MATCH_NAMES[partKey] || [partKey];
+    for (var i=0;i<names.length;i++) {
+      if (np === names[i] || np.indexOf(names[i]) >= 0 || names[i].indexOf(np) >= 0) return true;
+    }
+    return false;
+  }
+
+  // Lấy tên gốc (bỏ phần loại trong ngoặc/gạch ngang)
+  function baseName(s) {
+    return String(s||'').replace(/\s*[\-–—(].*$/,'').trim();
+  }
+
+  // Auto-fill cho partPickerBody
+  function autofillPartPicker(maMay) {
+    if (!maMay) return;
+    var vtMap = getVatTuMapForMay(maMay);
+    if (!vtMap) return;
+    var body = document.getElementById('partPickerBody');
+    if (!body) return;
+    body.querySelectorAll('.pi-row').forEach(function(row) {
+      var lbl = row.querySelector('.pi-name');
+      if (!lbl) return;
+      var ten = baseName(lbl.textContent.trim());
+      // Tìm partKey khớp
+      for (var pk in vtMap) {
+        if (!matchesPartKey(ten, pk)) continue;
+        var info = vtMap[pk];
+        // Set loại (dropdown .pi-loai-sel)
+        if (info.loai) {
+          var loaiSel = row.querySelector('.pi-loai-sel');
+          if (loaiSel) {
+            // Tìm option khớp
+            var found = false;
+            for (var i=0;i<loaiSel.options.length;i++) {
+              if (n(loaiSel.options[i].value) === n(info.loai) || n(loaiSel.options[i].text) === n(info.loai)) {
+                loaiSel.selectedIndex = i; found = true; break;
+              }
+            }
+            if (!found && info.loai) {
+              // Thêm option mới nếu chưa có
+              var opt = document.createElement('option');
+              opt.value = info.loai; opt.text = info.loai; opt.selected = true;
+              loaiSel.appendChild(opt);
+            }
+            loaiSel.dispatchEvent(new Event('change'));
+          }
+        }
+        // Set số lượng
+        if (info.sl && info.sl > 0) {
+          var qtyInp = row.querySelector('input[type=number]');
+          if (qtyInp) { qtyInp.value = info.sl; qtyInp.dispatchEvent(new Event('input')); }
+        }
+        break;
+      }
+    });
+  }
+
+  // Auto-fill cho pvb_selectedItems (danh sách đã chọn)
+  function autofillSelected(maMay) {
+    if (!maMay) return;
+    var vtMap = getVatTuMapForMay(maMay);
+    if (!vtMap) return;
+    var p = window.PV;
+    if (!p || !p.data || !Array.isArray(p.data.selected)) return;
+    p.data.selected.forEach(function(item) {
+      var ten = baseName(item.tenVatTu||'');
+      for (var pk in vtMap) {
+        if (!matchesPartKey(ten, pk)) continue;
+        var info = vtMap[pk];
+        if (info.loai) item.loaiVatTu = info.loai;
+        if (info.sl && info.sl > 0) item.soLuongCan = info.sl;
+        break;
+      }
+    });
+    // Re-render để phản ánh thay đổi
+    if (typeof pvBDSCRenderSelected === 'function') pvBDSCRenderSelected();
+  }
+
+  // Lấy mã máy hiện tại từ form pv17 hoặc pv16
+  function getCurrentMaMay() {
+    // Ưu tiên từ PV.machines
+    if (window.PV && Array.isArray(PV.machines) && PV.machines.length) {
+      var mm = PV.machines.map(function(m){return m&&m.maMay;}).filter(Boolean);
+      if (mm.length) return mm[0]; // lấy máy đầu tiên
+    }
+    // Fallback từ input
+    var inp = document.getElementById('pv17_mamay_0') || document.getElementById('pv16_mamay_0') || document.getElementById('pvb_maMay');
+    return inp ? inp.value.trim() : '';
+  }
+
+  // Patch pv17SetMachine và pv16SetMachine
+  function patchSetMachine(fnName) {
+    var orig = window[fnName];
+    if (!orig || orig.__yc2) return;
+    window[fnName] = function(i, m) {
+      orig.call(this, i, m);
+      var mm = m && m.maMay;
+      if (!mm) return;
+      setTimeout(function() {
+        autofillSelected(mm);
+        autofillPartPicker(mm);
+      }, 80);
+    };
+    window[fnName].__yc2 = true;
+  }
+
+  setTimeout(function() {
+    patchSetMachine('pv17SetMachine');
+    patchSetMachine('pv16SetMachine');
+  }, 300);
+
+  // Patch MutationObserver trên partPickerBody để auto-fill sau khi mở picker
+  setTimeout(function() {
+    var body = document.getElementById('partPickerBody');
+    if (!body) return;
+    var obs = new MutationObserver(function() {
+      setTimeout(function() {
+        var mm = getCurrentMaMay();
+        if (mm) autofillPartPicker(mm);
+      }, 60);
+    });
+    obs.observe(body, {childList:true, subtree:false});
+  }, 700);
+
+  // Expose để gọi thủ công nếu cần
+  window.yc2AutofillForMay = function(maMay) {
+    autofillSelected(maMay || getCurrentMaMay());
+    autofillPartPicker(maMay || getCurrentMaMay());
+  };
+
+})();
+</script>
+</html>`;
 
       await saveBDSCFileToDrive(wordHtml, fname, 'word', reportId);
     } finally {
@@ -8321,7 +9386,251 @@ th { text-align: center; font-weight: bold; background: #f5f5f5; }
     <div class="sign-cell">Người nhập kho</div>
   </div>
 </div>
-</body></html>`;
+</body>
+<script id="yc2-vattu-may-autofill">
+/* YC2 — Tự động điền loại & số lượng vật tư theo mã máy từ sheet "Vật tư máy" */
+(function(){
+  if(window.__yc2Done) return;
+  window.__yc2Done = true;
+
+  // Chuẩn hóa chuỗi để so sánh
+  function n(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/đ/g,'d').replace(/\s+/g,' ').trim(); }
+
+  // Tên cột linh kiện trong sheet "Vật tư máy" → tên linh kiện chuẩn
+  var PART_ALIASES = {
+    'bugi': ['bugi'],
+    'loc nhot 1': ['loc nhot 1','loc nhot/nuoc so 1','loc nhot so 1','loc dau 1'],
+    'loc nhot 2': ['loc nhot 2','loc nhot/nuoc so 2','loc nhot so 2','loc nuoc/nhot so 2','loc dau 2'],
+    'loc gio': ['loc gio','bau loc gio','bau loc gio / cum loc gio'],
+    'o bi cu phat': ['o bi cu phat','o bi may phat','o bi generator'],
+    'o bi truc danh lua': ['o bi truc danh lua','o bi truc','o bi danh lua'],
+    'day cu roa 1': ['day cu roa 1','day curoa 1','day curoa so 1','day cu roa so 1'],
+    'day cu roa 2': ['day cu roa 2','day curoa 2','day curoa so 2','day cu roa so 2'],
+    'day cu roa 3': ['day cu roa 3','day curoa 3','day curoa so 3','day cu roa so 3']
+  };
+
+  // Tên linh kiện chuẩn → các tên có thể match trong partPickerBody / pvb_selectedItems
+  var PART_MATCH_NAMES = {
+    'bugi': ['bugi'],
+    'loc nhot 1': ['loc nhot 1','loc nhot so 1','loc dau 1'],
+    'loc nhot 2': ['loc nhot 2','loc nhot so 2','loc nuoc/nhot so 2','loc nuoc nhot so 2','loc dau 2'],
+    'loc gio': ['loc gio','bau loc gio','bau loc gio / cum loc gio'],
+    'o bi cu phat': ['o bi cu phat'],
+    'o bi truc danh lua': ['o bi truc danh lua','o bi truc'],
+    'day cu roa 1': ['day cu roa 1','day curoa 1','day curoa so 1'],
+    'day cu roa 2': ['day cu roa 2','day curoa 2','day curoa so 2'],
+    'day cu roa 3': ['day cu roa 3','day curoa 3','day curoa so 3']
+  };
+
+  // Tìm partKey từ tên cột sheet
+  function findPartKey(colName) {
+    var nc = n(colName);
+    for (var key in PART_ALIASES) {
+      var aliases = PART_ALIASES[key];
+      for (var i=0;i<aliases.length;i++) {
+        if (nc === aliases[i] || nc.indexOf(aliases[i]) >= 0 || aliases[i].indexOf(nc) >= 0) return key;
+      }
+    }
+    return null;
+  }
+
+  // Lấy data từ vatTuCoDinh hoặc vatTu — sheet "Vật tư máy"
+  // Cấu trúc: mỗi row có Mã Máy, và các cột (Bugi_loai, Bugi_sl, Lọc nhớt 1_loai, ...)
+  // hoặc object có key kiểu {'Bugi': {loai:'BKR6E', sl:4}, ...}
+  function getVatTuMapForMay(maMay) {
+    if (!maMay) return null;
+    var p = window.PV;
+    if (!p || !p.data) return null;
+    var nm = n(maMay);
+
+    // Tìm trong vatTuMay (nếu server trả về riêng)
+    var sources = [];
+    if (Array.isArray(p.data.vatTuMay)) sources = sources.concat(p.data.vatTuMay);
+    if (Array.isArray(p.data.vatTuCoDinh)) {
+      // vatTuCoDinh có thể chứa rows kiểu "Vật tư máy"
+      p.data.vatTuCoDinh.forEach(function(r) {
+        var mm = String(r['Mã Máy']||r['Mã máy']||r['maMay']||'').trim();
+        if (mm) sources.push(r);
+      });
+    }
+
+    for (var i=0;i<sources.length;i++) {
+      var row = sources[i];
+      var rowMay = String(row['Mã Máy']||row['Mã máy']||row['maMay']||'').trim();
+      if (!rowMay) continue;
+      if (n(rowMay) !== nm) continue;
+
+      // Tìm thấy row của mã máy này — parse các cột linh kiện
+      var map = {};
+      Object.keys(row).forEach(function(col) {
+        var pk = findPartKey(col);
+        if (!pk) return;
+        var val = row[col];
+        if (!val) return;
+        // val có thể là string (loại) hoặc số (sl) hoặc object {loai, sl}
+        if (typeof val === 'object' && val !== null) {
+          if (!map[pk]) map[pk] = {};
+          if (val.loai) map[pk].loai = val.loai;
+          if (val.sl || val.soLuong) map[pk].sl = parseInt(val.sl||val.soLuong)||1;
+        } else if (typeof val === 'string') {
+          // Kiểm tra nếu cột tên có _loai hoặc _sl suffix
+          var nc2 = n(col);
+          if (!map[pk]) map[pk] = {};
+          if (nc2.endsWith('_loai') || nc2.endsWith('loai')) {
+            map[pk].loai = val;
+          } else if (nc2.endsWith('_sl') || nc2.endsWith('so luong') || nc2.endsWith('dinh muc')) {
+            map[pk].sl = parseInt(val)||1;
+          } else {
+            // Cột đơn chứa tên loại
+            if (!isNaN(parseFloat(val))) map[pk].sl = parseInt(val)||1;
+            else map[pk].loai = val;
+          }
+        } else if (typeof val === 'number') {
+          if (!map[pk]) map[pk] = {};
+          map[pk].sl = val;
+        }
+      });
+      return Object.keys(map).length > 0 ? map : null;
+    }
+    return null;
+  }
+
+  // Kiểm tra tên linh kiện có khớp partKey không
+  function matchesPartKey(partName, partKey) {
+    var np = n(partName);
+    var names = PART_MATCH_NAMES[partKey] || [partKey];
+    for (var i=0;i<names.length;i++) {
+      if (np === names[i] || np.indexOf(names[i]) >= 0 || names[i].indexOf(np) >= 0) return true;
+    }
+    return false;
+  }
+
+  // Lấy tên gốc (bỏ phần loại trong ngoặc/gạch ngang)
+  function baseName(s) {
+    return String(s||'').replace(/\s*[\-–—(].*$/,'').trim();
+  }
+
+  // Auto-fill cho partPickerBody
+  function autofillPartPicker(maMay) {
+    if (!maMay) return;
+    var vtMap = getVatTuMapForMay(maMay);
+    if (!vtMap) return;
+    var body = document.getElementById('partPickerBody');
+    if (!body) return;
+    body.querySelectorAll('.pi-row').forEach(function(row) {
+      var lbl = row.querySelector('.pi-name');
+      if (!lbl) return;
+      var ten = baseName(lbl.textContent.trim());
+      // Tìm partKey khớp
+      for (var pk in vtMap) {
+        if (!matchesPartKey(ten, pk)) continue;
+        var info = vtMap[pk];
+        // Set loại (dropdown .pi-loai-sel)
+        if (info.loai) {
+          var loaiSel = row.querySelector('.pi-loai-sel');
+          if (loaiSel) {
+            // Tìm option khớp
+            var found = false;
+            for (var i=0;i<loaiSel.options.length;i++) {
+              if (n(loaiSel.options[i].value) === n(info.loai) || n(loaiSel.options[i].text) === n(info.loai)) {
+                loaiSel.selectedIndex = i; found = true; break;
+              }
+            }
+            if (!found && info.loai) {
+              // Thêm option mới nếu chưa có
+              var opt = document.createElement('option');
+              opt.value = info.loai; opt.text = info.loai; opt.selected = true;
+              loaiSel.appendChild(opt);
+            }
+            loaiSel.dispatchEvent(new Event('change'));
+          }
+        }
+        // Set số lượng
+        if (info.sl && info.sl > 0) {
+          var qtyInp = row.querySelector('input[type=number]');
+          if (qtyInp) { qtyInp.value = info.sl; qtyInp.dispatchEvent(new Event('input')); }
+        }
+        break;
+      }
+    });
+  }
+
+  // Auto-fill cho pvb_selectedItems (danh sách đã chọn)
+  function autofillSelected(maMay) {
+    if (!maMay) return;
+    var vtMap = getVatTuMapForMay(maMay);
+    if (!vtMap) return;
+    var p = window.PV;
+    if (!p || !p.data || !Array.isArray(p.data.selected)) return;
+    p.data.selected.forEach(function(item) {
+      var ten = baseName(item.tenVatTu||'');
+      for (var pk in vtMap) {
+        if (!matchesPartKey(ten, pk)) continue;
+        var info = vtMap[pk];
+        if (info.loai) item.loaiVatTu = info.loai;
+        if (info.sl && info.sl > 0) item.soLuongCan = info.sl;
+        break;
+      }
+    });
+    // Re-render để phản ánh thay đổi
+    if (typeof pvBDSCRenderSelected === 'function') pvBDSCRenderSelected();
+  }
+
+  // Lấy mã máy hiện tại từ form pv17 hoặc pv16
+  function getCurrentMaMay() {
+    // Ưu tiên từ PV.machines
+    if (window.PV && Array.isArray(PV.machines) && PV.machines.length) {
+      var mm = PV.machines.map(function(m){return m&&m.maMay;}).filter(Boolean);
+      if (mm.length) return mm[0]; // lấy máy đầu tiên
+    }
+    // Fallback từ input
+    var inp = document.getElementById('pv17_mamay_0') || document.getElementById('pv16_mamay_0') || document.getElementById('pvb_maMay');
+    return inp ? inp.value.trim() : '';
+  }
+
+  // Patch pv17SetMachine và pv16SetMachine
+  function patchSetMachine(fnName) {
+    var orig = window[fnName];
+    if (!orig || orig.__yc2) return;
+    window[fnName] = function(i, m) {
+      orig.call(this, i, m);
+      var mm = m && m.maMay;
+      if (!mm) return;
+      setTimeout(function() {
+        autofillSelected(mm);
+        autofillPartPicker(mm);
+      }, 80);
+    };
+    window[fnName].__yc2 = true;
+  }
+
+  setTimeout(function() {
+    patchSetMachine('pv17SetMachine');
+    patchSetMachine('pv16SetMachine');
+  }, 300);
+
+  // Patch MutationObserver trên partPickerBody để auto-fill sau khi mở picker
+  setTimeout(function() {
+    var body = document.getElementById('partPickerBody');
+    if (!body) return;
+    var obs = new MutationObserver(function() {
+      setTimeout(function() {
+        var mm = getCurrentMaMay();
+        if (mm) autofillPartPicker(mm);
+      }, 60);
+    });
+    obs.observe(body, {childList:true, subtree:false});
+  }, 700);
+
+  // Expose để gọi thủ công nếu cần
+  window.yc2AutofillForMay = function(maMay) {
+    autofillSelected(maMay || getCurrentMaMay());
+    autofillPartPicker(maMay || getCurrentMaMay());
+  };
+
+})();
+</script>
+</html>`;
 }
 
 function pvBDSCOpenPrintModal(html, fname, draftPayload) {
