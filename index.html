@@ -4631,18 +4631,6 @@ function buildLifecycleData() {
     });
   });
 
-  // Hàm: với mã máy + BC hiện tại, tìm gio của BC trước đó trên cùng máy
-  function getPrevGio(maMay, curRepId) {
-    const timeline = machineTimeline[maMay || '__unknown__'] || [];
-    const idx = timeline.findIndex(t => t.repId === curRepId);
-    if (idx <= 0) return null; // không có BC trước
-    // Tìm BC trước đó gần nhất có gio > 0
-    for (let i = idx - 1; i >= 0; i--) {
-      if (timeline[i].gio > 0) return timeline[i].gio;
-    }
-    return null;
-  }
-
   // Lấy giờ đồng hồ HIỆN TẠI của từng máy:
   // Ưu tiên: cache từ Google Sheet riêng (fetch bởi fetchCurrentMachineHours)
   // Fallback: max giờ trong các BC đã lưu (nếu chưa fetch được)
@@ -4665,13 +4653,12 @@ function buildLifecycleData() {
     }
   });
 
-  // ── Bước 2: Thu thập sự kiện thay thế và tính tuổi thọ từng lần ──
+  // ── Bước 2: Thu thập sự kiện thay thế (chưa tính tuổi thọ ở đây) ──
   const byPart = {};
 
   list.forEach(r => {
     const curGio = parseDurationToHours(r.soGioVanHanh) || 0;
     const maMay = r.maMay || '__unknown__';
-    const prevGio = getPrevGio(maMay, r.id);
 
     (r.phen || []).forEach(p => {
       Object.entries(p.parts || {}).forEach(([lk, v]) => {
@@ -4684,23 +4671,9 @@ function buildLifecycleData() {
           byPart[key] = { name: key, events: [], machines: new Set() };
         }
 
-        // Tính tuổi thọ của linh kiện trong lần thay này:
-        // = gio_bc_hien_tai - gio_bc_truoc_do (cùng mã máy)
-        let lifeHours = null;
-        if (curGio > 0 && prevGio !== null && curGio > prevGio) {
-          lifeHours = curGio - prevGio;
-        } else if (curGio > 0 && prevGio === null) {
-          // Lần thay đầu tiên: dùng chính curGio (giờ từ đầu đến khi thay lần 1)
-          // Đánh dấu là "first_replace" để có thể filter riêng nếu cần
-          lifeHours = curGio; // sẽ xử lý sau trong phân tích
-        }
-
         byPart[key].events.push({
           date: r.nd || r.cat,
           gio: curGio,
-          prevGio: prevGio,
-          lifeHours: lifeHours,
-          isFirstReplace: (prevGio === null),
           maMay: maMay,
           repId: r.id,
           sl
@@ -4709,6 +4682,43 @@ function buildLifecycleData() {
       });
     });
   });
+
+  // ── Bước 2b: Tính prevGio/tuổi thọ THEO TỪNG LINH KIỆN, TỪNG MÁY ──
+  // (không dùng "BC trước đó của máy" vì BC đó có thể không thay linh kiện này)
+  Object.values(byPart).forEach(p => {
+    const byMachine = {};
+    p.events.forEach(e => {
+      const mm = e.maMay || '__unknown__';
+      if (!byMachine[mm]) byMachine[mm] = [];
+      byMachine[mm].push(e);
+    });
+    Object.values(byMachine).forEach(arr => {
+      // Sắp xếp theo giờ đồng hồ tăng dần (tie-break theo ngày) — phản ánh
+      // đúng thứ tự thực tế của các lần thay linh kiện này trên máy
+      arr.sort((a, b) => {
+        if (a.gio !== b.gio) return a.gio - b.gio;
+        const da = parseVNDate(a.date) || new Date(0);
+        const db = parseVNDate(b.date) || new Date(0);
+        return da - db;
+      });
+      arr.forEach((e, idx) => {
+        if (idx === 0) {
+          // Lần thay đầu tiên ghi nhận được của linh kiện này trên máy:
+          // tuổi thọ = từ giờ máy = 0 đến lúc thay (chính curGio)
+          e.prevGio = null;
+          e.isFirstReplace = true;
+          e.lifeHours = (e.gio > 0) ? e.gio : null;
+        } else {
+          const prev = arr[idx - 1];
+          e.prevGio = prev.gio;
+          e.isFirstReplace = false;
+          e.lifeHours = (e.gio > 0 && prev.gio > 0 && e.gio > prev.gio)
+            ? (e.gio - prev.gio) : null;
+        }
+      });
+    });
+  });
+
 
   // ── Bước 3: Tính định mức cho từng loại vật tư ──
   return Object.values(byPart).map(p => {
@@ -10506,12 +10516,27 @@ nav=function(p){
     var p=pvRef(); if(!p||!p.data||!rows||!rows.length)return false;
     var byKey={}, byName={};
     rows.forEach(function(x){byKey[norm(x.cum)+'|'+norm(x.ten)]=x.loai;byName[norm(x.ten)]=x.loai;});
+    var existingNames={};
     ['vatTu','vatTuCoDinh'].forEach(function(k){(p.data[k]||[]).forEach(function(o){
       var cum=String(o['Cụm Linh Kiện']||o['Cụm linh kiện']||o.cumLinhKien||'').trim();
       var ten=String(o['Tên Chi Tiết / Linh Kiện Thay Thế']||o['Tên vật tư']||o.tenVatTu||'').trim();
+      if(ten) existingNames[norm(ten)]=true;
       var loai=byKey[norm(cum)+'|'+norm(ten)]||byName[norm(ten)]||'';
       if(loai && !String(o['Các loại']||o['Cac loai']||o.loaiVatTu||'').trim())o['Các loại']=loai;
     });});
+    // Vật tư mới (chưa tồn tại trong vatTu/vatTuCoDinh) → thêm vào vatTuCoDinh
+    if(!Array.isArray(p.data.vatTuCoDinh)) p.data.vatTuCoDinh=[];
+    rows.forEach(function(x){
+      if(!x.ten || existingNames[norm(x.ten)]) return;
+      existingNames[norm(x.ten)]=true;
+      p.data.vatTuCoDinh.push({
+        'Cụm Linh Kiện': x.cum,
+        'Tên Chi Tiết / Linh Kiện Thay Thế': x.ten,
+        tenVatTu: x.ten,
+        cumLinhKien: x.cum,
+        'Các loại': x.loai
+      });
+    });
     try{localStorage.setItem('EGREEN_PV27_CAC_LOAI_CACHE',JSON.stringify(rows));}catch(e){}
     try{if(typeof pvBDSCRenderVatTuSearch==='function')pvBDSCRenderVatTuSearch();if(typeof pvBDSCRenderSelected==='function')pvBDSCRenderSelected();}catch(e){}
     return true;
