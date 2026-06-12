@@ -15188,212 +15188,179 @@ canvas {
 </style>
 
 <!-- ═══════════════════════════════════════════════════════
-  PATCH v49 - MỞ RỘNG DROPDOWN "CÁC LOẠI" CHO LINH KIỆN
-  - Bổ sung đầy đủ các loại còn thiếu từ Sheet 9 (ảnh chụp màn hình)
-  - Hỗ trợ: Công tắc xoay, AVR, Bầu lọc gió, Bugi, Ổ bi, Dây curoa,
-            Lọc nhớt, và thêm nhiều linh kiện khác
-  - Cơ chế: merge vào pv26's FALLBACK_TYPES → không conflict với logic cũ
+  PATCH v49 - DROPDOWN "CÁC LOẠI" CHO MODAL CHỌN LINH KIỆN
+  - KHÔNG hardcode bất kỳ dữ liệu nào
+  - Chỉ đọc cột "Các loại" từ PV.data.vatTu (sheet 9) do API trả về
+  - Thêm dropdown loại vào từng dòng trong modal partPickerBody
+  - confirmParts() lưu loai_sp vào sel object
 ═══════════════════════════════════════════════════════ -->
-<script id="pv49-extend-fallback-types">
+<script id="pv49-partpicker-loai-dropdown">
 (function(){
   if(window.__pv49Done) return;
   window.__pv49Done = true;
-
-  /* ── Bổ sung loại vào pv26's FALLBACK_TYPES ── */
-  var EXTRA = {
-    // Nguồn DC
-    'cong tac xoay': ['BKR6E','DCPR8E','Mar10A-J 4706','BP6ES'],
-
-    // Hệ thống đánh lửa
-    'bugi': ['BKR6E','DCPR8E','Mar10A-J 4706','BP6ES'],
-
-    // Nguồn điện 3 pha
-    'avr': ['Chổi than SX440','SX440','GAVR 20A'],
-    'avr sx440': ['Chổi than SX440','SX440','GAVR 20A'],
-    'choi than': ['Chổi than SX440','SX440'],
-
-    // Ht nạp, xả, tăng áp
-    'bau loc gio': ['LỌC GIÓ 6D105(AS1024)','A-6465A (Nitco)/ A-6117-S','Lọc gió A6117S','Lọc gió Donaldson P532473','P831197'],
-    'bau loc gio / cum loc gio': ['LỌC GIÓ 6D105(AS1024)','A-6465A (Nitco)/ A-6117-S','Lọc gió A6117S','Lọc gió Donaldson P532473','P831197'],
-    'cum loc gio': ['LỌC GIÓ 6D105(AS1024)','A-6465A (Nitco)/ A-6117-S','Lọc gió A6117S','Lọc gió Donaldson P532473','P831197'],
-    'loc gio': ['LỌC GIÓ 6D105(AS1024)','A-6465A (Nitco)/ A-6117-S','Lọc gió A6117S','Lọc gió Donaldson P532473','P831197'],
-
-    // Ổ bi
-    'o bi truc danh lua': ['Vòng bi SKF 6007 - 2Z'],
-    'o bi cu phat': ['Vòng bi E 30206J','Vòng bi 6312C3','Vòng bi 6317','Vòng bi 6215ZZCM','Vòng bi 6310-2Z'],
-
-    // Dây curoa / đai
-    'day curoa': ['RECMF - 8560','A-7473','A-5639','12PK1625','A64','8610','C60 - RECMF 9600','A54','5PK1110','5PK1050'],
-    'day dai': ['RECMF - 8560','A-7473','A-5639','12PK1625','A64','8610','C60 - RECMF 9600','A54','5PK1110','5PK1050'],
-
-    // Lọc nhớt
-    'loc nhot 1': ['C-5602','T-5121','LF9009','Lọc nhớt Sakura O-18051','WF2072','Lọc nhớt Sakura O-1808','Lọc nhớt Sakura O-1809','Lọc nhớt Sakura O-1804','Lọc nhớt Sakura O-1806'],
-    'loc nhot 2': ['C-5602','T-5121','LF9009','Lọc nhớt Sakura O-18051','WF2072','Lọc nhớt Sakura O-1808','Lọc nhớt Sakura O-1809','Lọc nhớt Sakura O-1804','Lọc nhớt Sakura O-1806'],
-    'bo loc nhot dong toan phan': ['C-5602','T-5121','LF9009','Lọc nhớt Sakura O-18051','WF2072','Lọc nhớt Sakura O-1808','Lọc nhớt Sakura O-1809','Lọc nhớt Sakura O-1804','Lọc nhớt Sakura O-1806'],
-    'bo loc nhot tinh dong re nhanh': ['C-5602','T-5121','LF9009','Lọc nhớt Sakura O-18051','WF2072','Lọc nhớt Sakura O-1808','Lọc nhớt Sakura O-1809','Lọc nhớt Sakura O-1804','Lọc nhớt Sakura O-1806'],
-    'loc nhot': ['C-5602','T-5121','LF9009','Lọc nhớt Sakura O-18051','WF2072','Lọc nhớt Sakura O-1808','Lọc nhớt Sakura O-1809','Lọc nhớt Sakura O-1804','Lọc nhớt Sakura O-1806'],
-
-    // Điều tốc
-    'eg2000': ['EG2000 Woodward','EG2000 Clone'],
-    'esd5111': ['ESD5111 Woodward','ESD5111 Clone'],
-
-    // Ắc quy
-    'ac quy': ['12V 45Ah','12V 65Ah','12V 100Ah','24V 45Ah'],
-    'ac quy dau cuc': ['12V 45Ah','12V 65Ah','12V 100Ah','24V 45Ah'],
-
-    // Gioăng mặt máy
-    'gioang mat may': ['Gioăng MLS','Gioăng đồng','Gioăng thép'],
-
-    // Xéc măng
-    'xec mang khi 1': ['STD','0.25','0.50','0.75','1.00'],
-    'xec mang khi 2': ['STD','0.25','0.50','0.75','1.00'],
-    'xec mang khi 3': ['STD','0.25','0.50','0.75','1.00'],
-    'xec mang dau': ['STD','0.25','0.50','0.75','1.00'],
-
-    // Piston
-    'piston': ['STD','0.25','0.50','0.75','1.00'],
-
-    // Bơm nhớt
-    'bom nhot': ['Bơm bánh răng','Bơm piston'],
-
-    // Relay thời gian
-    'relay thoi gian 24vdc': ['Relay thời gian 24VDC 10A 8 chân','Relay thời gian 24VDC 10A 11 chân'],
-    'relay thoi gian 24vdc 10a 8 chan': ['Đế relay 8 chân','Relay thời gian 24VDC 10A'],
-    'de relay thoi gian 24vdc 10a 8 chan': ['Đế relay 8 chân nhựa','Đế relay 8 chân kim loại'],
-
-    // Relay trung gian
-    'relay trung gian 24vdc 10a': ['Relay 24VDC 10A 8 chân','Relay 24VDC 10A 14 chân'],
-    'de relay trung gian': ['Đế relay 8 chân','Đế relay 14 chân'],
-
-    // Màn hình SmartGen
-    'man hinh smartgen': ['SmartGen HGM410N','SmartGen HGM6120N','SmartGen HGM9310'],
-
-    // Pickup cảm biến tốc độ
-    'pickup': ['Pickup Hall Effect','Pickup từ trường','Pickup PR08-2DP','Pickup inductance'],
-
-    // Turbo
-    'turbo': ['Turbo tăng áp TD025','Turbo tăng áp GT2052','Turbo tăng áp H1C'],
-
-    // Bơm nước
-    'bom nuoc dien': ['Bơm nước điện 12V','Bơm nước điện 24V'],
-
-    // Nhớt bôi trơn
-    'nhot boi tron': ['5W-30','10W-40','15W-40','20W-50','SAE 30'],
-
-    // Aptomat
-    'aptomat c6 c10': ['CHINT 1P C6','CHINT 1P C10','LS 1P C6','LS 1P C10'],
-    'aptomat chint 1p c10': ['CHINT 1P C10','LS 1P C10'],
-
-    // Van PVC
-    'van pvc chinh tinh': ['Van PVC 1/2 inch','Van PVC 3/4 inch','Van PVC 1 inch'],
-    'van pvc on off': ['Van PVC 1/2 inch','Van PVC 3/4 inch','Van PVC 1 inch'],
-
-    // Lưới lọc thô
-    'luoi loc tho cac-te': ['Phao lọc nhớt','Lưới lọc thô'],
-    'phao loc nhot': ['Phao lọc nhớt 4JB1','Phao lọc nhớt 6BT']
-  };
 
   function norm(s){
     return String(s||'').toLowerCase().normalize('NFD')
       .replace(/[\u0300-\u036f]/g,'').replace(/\u0111/g,'d').replace(/\s+/g,' ').trim();
   }
+  function esc(s){
+    return String(s||'').replace(/[&<>"']/g,function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
   function uniq(arr){
     var out=[],seen={};
-    (arr||[]).forEach(function(v){
-      v=String(v||'').trim();if(!v)return;
-      var k=norm(v);if(!seen[k]){seen[k]=1;out.push(v);}
-    });
+    (arr||[]).forEach(function(v){v=String(v||'').trim();if(!v)return;var k=norm(v);if(!seen[k]){seen[k]=1;out.push(v);}});
     return out;
   }
-
-  // Merge vào pv26 FALLBACK_TYPES nếu pv26 đã chạy
-  function mergeIntoPv26(){
-    // pv26 lưu FALLBACK_TYPES trong closure, nhưng expose qua window.getVatTuLoai
-    // Ta merge trực tiếp bằng cách patch getVatTuLoai (v41) và _pv26OptionsFor nếu có
-    // Cách chắc chắn hơn: inject vào VAT_TU_LOAI_MAP (v41) và PV45_TYPES (v45)
-    if(window.VAT_TU_LOAI_MAP){
-      Object.keys(EXTRA).forEach(function(k){
-        // Tìm key gốc (không normalize) để merge
-        var foundKey = null;
-        Object.keys(window.VAT_TU_LOAI_MAP).forEach(function(mk){
-          if(norm(mk)===k) foundKey=mk;
-        });
-        if(foundKey){
-          window.VAT_TU_LOAI_MAP[foundKey] = uniq((window.VAT_TU_LOAI_MAP[foundKey]||[]).concat(EXTRA[k]));
-        } else {
-          // Thêm key mới với tên normalize (pv41 dùng norm để lookup)
-          window.VAT_TU_LOAI_MAP[k] = uniq(EXTRA[k]);
-        }
-      });
-    }
-    if(window.PV45_TYPES){
-      Object.keys(EXTRA).forEach(function(k){
-        window.PV45_TYPES[k] = uniq((window.PV45_TYPES[k]||[]).concat(EXTRA[k]));
-      });
-    }
+  function splitTypes(raw){
+    raw=String(raw||'').replace(/\r/g,'\n').trim();
+    if(!raw)return [];
+    return uniq(raw.split(/\n|;|\|/g).map(function(v){return String(v||'').replace(/^[-•]+\s*/,'').trim();}));
   }
 
-  // Patch window.getVatTuLoai để fallback vào EXTRA nếu không tìm thấy
-  var origGetVatTuLoai = window.getVatTuLoai;
-  window.getVatTuLoai = function(tenVatTu){
-    var res = origGetVatTuLoai ? origGetVatTuLoai(tenVatTu) : [];
-    if(res && res.length) return res;
-    // Fallback sang EXTRA
-    var n = norm(tenVatTu||'');
-    var out = [];
-    Object.keys(EXTRA).forEach(function(k){
-      if(n===k || n.indexOf(k)>=0 || k.indexOf(n)>=0) out=out.concat(EXTRA[k]);
-    });
-    return uniq(out);
-  };
-
-  // Patch pv26's internal optionsFor bằng cách override _pv26OptionsFor nếu tồn tại
-  var origPv26OptionsFor = window._pv26OptionsFor;
-  window._pv26OptionsFor = function(cum, ten){
-    var res = origPv26OptionsFor ? origPv26OptionsFor(cum, ten) : [];
-    if(res && res.length) return res;
-    return window.getVatTuLoai(ten);
-  };
-
-  // Inject dữ liệu loại vào vatTu rows trong PV.data để pv26's optionsFor tìm thấy
-  function injectTypesIntoVatTu(){
+  // Lấy danh sách "Các loại" cho một tên linh kiện từ PV.data (sheet 9)
+  function getLoaiFromSheet(tenVatTu){
     try {
       var p = window.PV;
-      if(!p||!p.data) return;
-      function inject(arr){
-        (arr||[]).forEach(function(r){
-          var name = r['Tên Chi Tiết / Linh Kiện Thay Thế']||r['Tên vật tư']||r.tenVatTu||'';
-          if(!name) return;
-          var existing = r['Các loại']||r['Cac loai']||'';
-          if(String(existing).trim()) return; // đã có rồi
-          var types = window.getVatTuLoai(name);
-          if(types.length) r['Các loại'] = types.join('\n');
-        });
+      if(!p||!p.data) return [];
+      var nt = norm(tenVatTu);
+      var all = (p.data.vatTu||[]).concat(p.data.vatTuCoDinh||[]);
+      for(var i=0;i<all.length;i++){
+        var r=all[i];
+        var ten = r['Tên Chi Tiết / Linh Kiện Thay Thế']||r['Tên vật tư']||r.tenVatTu||'';
+        if(norm(ten)===nt){
+          var raw = r['Các loại']||r['Cac loai']||r['cac loai']||'';
+          var types = splitTypes(raw);
+          if(types.length) return types;
+        }
       }
-      inject(p.data.vatTu);
-      inject(p.data.vatTuCoDinh);
     } catch(e){}
+    return [];
   }
 
-  // Áp dụng ngay và sau khi load
-  mergeIntoPv26();
-  injectTypesIntoVatTu();
-  setTimeout(function(){ mergeIntoPv26(); injectTypesIntoVatTu(); }, 500);
-  setTimeout(function(){ mergeIntoPv26(); injectTypesIntoVatTu(); }, 2000);
-  setTimeout(function(){ mergeIntoPv26(); injectTypesIntoVatTu(); }, 5000);
+  // CSS cho dropdown loại trong partPicker
+  var st = document.createElement('style');
+  st.textContent = [
+    '.pi-loai-sel{',
+    '  border:1.5px solid var(--bd);border-radius:6px;',
+    '  padding:3px 6px;font-size:11px;background:#fff;',
+    '  color:var(--s);cursor:pointer;min-width:130px;',
+    '  flex-shrink:0;outline:none;',
+    '}',
+    '.pi-loai-sel:focus{border-color:var(--g);box-shadow:0 0 0 2px rgba(13,110,63,.1)}',
+    '.pi-loai-wrap{display:flex;align-items:center;gap:4px;margin-left:4px}',
+    '.pi-loai-wrap .pi-loai-label{font-size:10px;color:#64748b;white-space:nowrap}'
+  ].join('');
+  document.head.appendChild(st);
 
-  // Wrap pvBDSCSyncInBackground_ để re-inject sau mỗi lần sync
+  // Patch openPartPicker: sau khi render xong, thêm dropdown loại
+  function injectLoaiDropdowns(){
+    var body = document.getElementById('partPickerBody');
+    if(!body) return;
+    body.querySelectorAll('.pi-row').forEach(function(row){
+      if(row.querySelector('.pi-loai-wrap')) return; // đã có rồi
+      var lbl = row.querySelector('.pi-name');
+      if(!lbl) return;
+      var ten = lbl.textContent.trim();
+      var loais = getLoaiFromSheet(ten);
+      if(!loais.length) return;
+
+      // Lấy loai đã lưu trước đó (nếu có)
+      var savedLoai = row.dataset.loaiSp || '';
+
+      var wrap = document.createElement('div');
+      wrap.className = 'pi-loai-wrap';
+      wrap.innerHTML = '<span class="pi-loai-label">Loại:</span>' +
+        '<select class="pi-loai-sel" title="Chọn loại">' +
+        '<option value="">— Chọn loại —</option>' +
+        loais.map(function(l){
+          return '<option value="'+esc(l)+'"'+(norm(l)===norm(savedLoai)?' selected':'')+'>'+esc(l)+'</option>';
+        }).join('') +
+        '</select>';
+
+      // Chèn sau pi-acts (trước qty input)
+      var acts = row.querySelector('.pi-acts');
+      if(acts && acts.nextSibling){
+        row.insertBefore(wrap, acts.nextSibling);
+      } else {
+        row.appendChild(wrap);
+      }
+    });
+  }
+
+  // Patch openPartPicker để gọi injectLoaiDropdowns sau khi render
+  var origOpenOv = window.openOv;
+  // Dùng MutationObserver trên partPickerBody để inject sau khi innerHTML thay đổi
   setTimeout(function(){
-    var orig = window.pvBDSCSyncInBackground_;
-    if(orig && !orig.__pv49) {
-      window.pvBDSCSyncInBackground_ = async function(){
-        var r = orig.apply ? await orig.apply(this,arguments) : await orig();
-        mergeIntoPv26(); injectTypesIntoVatTu();
-        return r;
-      };
-      window.pvBDSCSyncInBackground_.__pv49 = true;
+    var body = document.getElementById('partPickerBody');
+    if(!body) return;
+    var obs = new MutationObserver(function(){
+      setTimeout(injectLoaiDropdowns, 30);
+    });
+    obs.observe(body, {childList:true, subtree:false});
+  }, 500);
+
+  // Patch confirmParts để lưu loaiSp vào sel
+  var origConfirmParts = window.confirmParts;
+  window.confirmParts = function(){
+    // Lưu loai đã chọn vào row.dataset trước khi confirmParts gốc đọc
+    var body = document.getElementById('partPickerBody');
+    if(body){
+      body.querySelectorAll('.pi-row').forEach(function(row){
+        var sel = row.querySelector('.pi-loai-sel');
+        if(sel) row.dataset.loaiSp = sel.value;
+      });
     }
-  }, 800);
+
+    // Override tạm confirmParts để inject loaiSp vào sel object
+    var origQS = document.querySelectorAll.bind(document);
+    // Gọi hàm gốc
+    if(origConfirmParts) {
+      // Wrap: sau khi gốc chạy, cập nhật lại disp.dataset.parts với loaiSp
+      try {
+        // Xây sel có loaiSp
+        var selWithLoai = {};
+        if(body){
+          body.querySelectorAll('.pi-row').forEach(function(row){
+            var cb = row.querySelector('input[type=checkbox]');
+            if(!cb||!cb.checked) return;
+            var lbl = row.querySelector('.pi-name');
+            if(!lbl) return;
+            var name = lbl.textContent.trim();
+            var act = row.querySelector('.pa.rep,.pa.fix,.pa.cln');
+            var loai = act ? ({rep:'Thay thế',fix:'Sửa chữa',cln:'Bảo dưỡng'}[act.classList[1]]||'Thay thế') : 'Thay thế';
+            var qtyInp = row.querySelector('input[type=number]');
+            var sl = qtyInp ? Math.max(1,parseInt(qtyInp.value)||1) : 1;
+            var gcInp = row.querySelector('.pi-gc');
+            var gc = gcInp ? gcInp.value.trim() : '';
+            var loaiSel = row.querySelector('.pi-loai-sel');
+            var loaiSp = loaiSel ? loaiSel.value : '';
+            selWithLoai[name] = {loai:loai, sl:sl, gc:gc, loaiSp:loaiSp};
+          });
+        }
+        origConfirmParts();
+        // Sau khi gốc ghi dataset.parts, merge thêm loaiSp vào
+        if(typeof curPartTarget !== 'undefined'){
+          var disp = document.getElementById('ph-parts-'+curPartTarget);
+          if(disp && disp.dataset.parts){
+            try{
+              var parsed = JSON.parse(disp.dataset.parts);
+              Object.keys(selWithLoai).forEach(function(k){
+                if(parsed[k] && selWithLoai[k].loaiSp){
+                  parsed[k].loaiSp = selWithLoai[k].loaiSp;
+                }
+              });
+              disp.dataset.parts = JSON.stringify(parsed);
+            }catch(e){}
+          }
+        }
+      } catch(e){ if(origConfirmParts) origConfirmParts(); }
+    } else {
+      // Không có hàm gốc, tự xử lý (fallback)
+    }
+  };
+  window.confirmParts.__pv49 = true;
 
 })();
 </script>
